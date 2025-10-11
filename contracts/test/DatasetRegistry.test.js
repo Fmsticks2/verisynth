@@ -12,7 +12,7 @@ describe("DatasetRegistry", function () {
     DatasetRegistry = await ethers.getContractFactory("DatasetRegistry");
     [owner, addr1, addr2] = await ethers.getSigners();
     datasetRegistry = await DatasetRegistry.deploy();
-    await datasetRegistry.deployed();
+    await datasetRegistry.waitForDeployment();
   });
 
   describe("Deployment", function () {

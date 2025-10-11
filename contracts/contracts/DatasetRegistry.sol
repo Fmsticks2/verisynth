@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -8,42 +8,41 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * @dev Smart contract for registering and verifying synthetic datasets
  */
 contract DatasetRegistry is Ownable {
-    using Counters for Counters.Counter;
-    
-    Counters.Counter private _datasetIds;
+    // Use simple counter instead of deprecated Counters library
+    uint256 public nextDatasetId = 1;
     
     struct Dataset {
         uint256 id;
         string modelVersion;
         string seed;
         string dataHash;
-        string cid; // IPFS or 0G Storage reference
+        string cid;
         address owner;
         uint256 timestamp;
     }
     
-    // Mapping from dataset ID to Dataset
+    // Mapping from dataset ID to dataset
     mapping(uint256 => Dataset) public datasets;
     
-    // Mapping from owner to array of dataset IDs
+    // Mapping from owner address to array of dataset IDs
     mapping(address => uint256[]) public ownerDatasets;
     
     // Events
     event DatasetRegistered(
         uint256 indexed id,
         address indexed owner,
-        string cid,
         string modelVersion,
-        string dataHash
+        string dataHash,
+        string cid
     );
+    
+    constructor() Ownable(msg.sender) {}
     
     event DatasetVerified(
         uint256 indexed id,
         bool verified,
         address indexed verifier
     );
-    
-    constructor() {}
     
     /**
      * @dev Register a new dataset
@@ -64,11 +63,11 @@ contract DatasetRegistry is Ownable {
         require(bytes(dataHash).length > 0, "Data hash cannot be empty");
         require(bytes(cid).length > 0, "CID cannot be empty");
         
-        _datasetIds.increment();
-        uint256 newDatasetId = _datasetIds.current();
+        uint256 datasetId = nextDatasetId;
+        nextDatasetId++;
         
-        Dataset memory newDataset = Dataset({
-            id: newDatasetId,
+        datasets[datasetId] = Dataset({
+            id: datasetId,
             modelVersion: modelVersion,
             seed: seed,
             dataHash: dataHash,
@@ -77,18 +76,17 @@ contract DatasetRegistry is Ownable {
             timestamp: block.timestamp
         });
         
-        datasets[newDatasetId] = newDataset;
-        ownerDatasets[msg.sender].push(newDatasetId);
+        ownerDatasets[msg.sender].push(datasetId);
         
         emit DatasetRegistered(
-            newDatasetId,
+            datasetId,
             msg.sender,
             cid,
             modelVersion,
             dataHash
         );
         
-        return newDatasetId;
+        return datasetId;
     }
     
     /**
@@ -97,7 +95,7 @@ contract DatasetRegistry is Ownable {
      * @return The dataset struct
      */
     function getDataset(uint256 id) external view returns (Dataset memory) {
-        require(id > 0 && id <= _datasetIds.current(), "Dataset does not exist");
+        require(id > 0 && id < nextDatasetId, "Dataset does not exist");
         return datasets[id];
     }
     
@@ -111,7 +109,7 @@ contract DatasetRegistry is Ownable {
         external 
         returns (bool) 
     {
-        require(id > 0 && id <= _datasetIds.current(), "Dataset does not exist");
+        require(id > 0 && id < nextDatasetId, "Dataset does not exist");
         require(bytes(computedHash).length > 0, "Computed hash cannot be empty");
         
         Dataset memory dataset = datasets[id];
@@ -141,7 +139,7 @@ contract DatasetRegistry is Ownable {
      * @return The total count
      */
     function getTotalDatasets() external view returns (uint256) {
-        return _datasetIds.current();
+        return nextDatasetId - 1;
     }
     
     /**
@@ -150,6 +148,6 @@ contract DatasetRegistry is Ownable {
      * @return Whether the dataset exists
      */
     function datasetExists(uint256 id) external view returns (bool) {
-        return id > 0 && id <= _datasetIds.current();
+        return id > 0 && id < nextDatasetId;
     }
 }

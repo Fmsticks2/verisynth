@@ -1,0 +1,23 @@
+{
+  "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "abi": [
+    "constructor()",
+    "error OwnableInvalidOwner(address)",
+    "error OwnableUnauthorizedAccount(address)",
+    "event DatasetRegistered(uint256 indexed,address indexed,string,string,string)",
+    "event DatasetVerified(uint256 indexed,bool,address indexed)",
+    "event OwnershipTransferred(address indexed,address indexed)",
+    "function datasetExists(uint256) view returns (bool)",
+    "function datasets(uint256) view returns (uint256,string,string,string,string,address,uint256)",
+    "function getDataset(uint256) view returns ((uint256,string,string,string,string,address,uint256))",
+    "function getDatasetsByOwner(address) view returns (uint256[])",
+    "function getTotalDatasets() view returns (uint256)",
+    "function nextDatasetId() view returns (uint256)",
+    "function owner() view returns (address)",
+    "function ownerDatasets(address,uint256) view returns (uint256)",
+    "function registerDataset(string,string,string,string) returns (uint256)",
+    "function renounceOwnership()",
+    "function transferOwnership(address)",
+    "function verifyDataset(uint256,string) returns (bool)"
+  ]
+}
