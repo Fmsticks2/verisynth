@@ -1,9 +1,16 @@
 import React from 'react';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { motion } from 'framer-motion';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Icon } from '@iconify/react';
 
-const Header: React.FC = () => {
+type ActiveTab = 'generate' | 'verify' | 'docs';
+
+interface HeaderProps {
+  activeTab: ActiveTab;
+  onTabChange: (tab: ActiveTab) => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
   return (
     <motion.header
       initial={{ y: -20, opacity: 0 }}
