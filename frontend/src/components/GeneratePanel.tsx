@@ -1,28 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { useAccount, useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
-import { generateSyntheticData, mockIPFSUpload } from '../utils/dataGenerator';
-import { GeneratedDataset } from '../types';
+import { useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
+import { generateSyntheticData, computeDataHash, mockIPFSUpload } from '../utils/dataGenerator';
+import { Dataset, GeneratedDataset } from '../types';
+import { CONTRACT_CONFIG } from '../utils/contractConfig';
 import Modal from './Modal';
-
-// Import contract ABI (this will be generated after deployment)
-const CONTRACT_ABI = [
-  {
-    "inputs": [
-      {"internalType": "string", "name": "modelVersion", "type": "string"},
-      {"internalType": "string", "name": "seed", "type": "string"},
-      {"internalType": "string", "name": "dataHash", "type": "string"},
-      {"internalType": "string", "name": "cid", "type": "string"}
-    ],
-    "name": "registerDataset",
-    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
-
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // This will be updated after deployment
 
 interface GeneratePanelProps {
   onDatasetGenerated?: (dataset: GeneratedDataset) => void;

@@ -43,24 +43,24 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            <a
-              href="#generate"
-              className="text-gray-600 hover:text-primary-600 font-medium transition-colors duration-200"
-            >
-              Generate
-            </a>
-            <a
-              href="#verify"
-              className="text-gray-600 hover:text-primary-600 font-medium transition-colors duration-200"
-            >
-              Verify
-            </a>
-            <a
-              href="#docs"
-              className="text-gray-600 hover:text-primary-600 font-medium transition-colors duration-200"
-            >
-              Docs
-            </a>
+            {[
+              { id: 'generate' as const, label: 'Generate', icon: 'ph:plus-circle-bold' },
+              { id: 'verify' as const, label: 'Verify', icon: 'ph:shield-check-bold' },
+              { id: 'docs' as const, label: 'Docs', icon: 'ph:book-open-bold' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => onTabChange(item.id)}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                  activeTab === item.id
+                    ? 'bg-primary-100 text-primary-700 font-medium'
+                    : 'text-gray-600 hover:text-primary-600 hover:bg-gray-100'
+                }`}
+              >
+                <Icon icon={item.icon} className="w-5 h-5" />
+                <span>{item.label}</span>
+              </button>
+            ))}
           </nav>
 
           {/* Wallet Connection */}
