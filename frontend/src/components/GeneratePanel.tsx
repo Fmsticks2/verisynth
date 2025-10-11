@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
-import { generateSyntheticData, computeDataHash, mockIPFSUpload } from '../utils/dataGenerator';
-import { Dataset, GeneratedDataset } from '../types';
+import { useContractWrite, usePrepareContractWrite, useWaitForTransaction, useAccount } from 'wagmi';
+import { generateSyntheticData, mockIPFSUpload } from '../utils/dataGenerator';
+import { GeneratedDataset } from '../types';
 import { CONTRACT_CONFIG } from '../utils/contractConfig';
 import Modal from './Modal';
 
@@ -12,7 +12,7 @@ interface GeneratePanelProps {
 }
 
 const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   
   const [formData, setFormData] = useState({
     modelVersion: 'v1.0.0',

@@ -4,7 +4,7 @@ import Header from './components/Header';
 import GeneratePanel from './components/GeneratePanel';
 import VerifyPanel from './components/VerifyPanel';
 import DatasetCard from './components/DatasetCard';
-import { Dataset } from './types';
+import { Dataset, GeneratedDataset } from './types';
 
 type ActiveTab = 'generate' | 'verify' | 'docs';
 
@@ -12,7 +12,17 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('generate');
   const [datasets, setDatasets] = useState<Dataset[]>([]);
 
-  const handleDatasetGenerated = (dataset: Dataset) => {
+  const handleDatasetGenerated = (generatedDataset: GeneratedDataset) => {
+    // Convert GeneratedDataset to Dataset format for display
+    const dataset: Dataset = {
+      id: Date.now(), // Temporary ID until blockchain registration
+      modelVersion: generatedDataset.metadata.modelVersion,
+      seed: generatedDataset.metadata.seed,
+      dataHash: generatedDataset.hash,
+      cid: '', // Will be set after IPFS upload
+      owner: '', // Will be set after blockchain registration
+      timestamp: generatedDataset.metadata.generatedAt,
+    };
     setDatasets(prev => [dataset, ...prev]);
   };
 

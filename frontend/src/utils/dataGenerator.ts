@@ -169,7 +169,7 @@ export function computeDataHash(data: any): string {
   return ethers.utils.keccak256(ethers.utils.toUtf8Bytes(dataString));
 }
 
-export function mockIPFSUpload(data: any): Promise<string> {
+export function mockIPFSUpload(_data: any): Promise<string> {
   // Mock IPFS upload - in a real implementation, this would upload to IPFS
   return new Promise((resolve) => {
     setTimeout(() => {

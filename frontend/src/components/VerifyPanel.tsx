@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
+import { useContractRead } from 'wagmi';
 import { computeDataHash } from '../utils/dataGenerator';
 import { Dataset, VerificationResult } from '../types';
 import { CONTRACT_CONFIG } from '../utils/contractConfig';
@@ -24,7 +24,7 @@ const VerifyPanel: React.FC = () => {
     address: CONTRACT_CONFIG.address,
     abi: CONTRACT_CONFIG.abi,
     functionName: 'getDataset',
-    args: datasetId ? [parseInt(datasetId)] : undefined,
+    args: datasetId ? [BigInt(parseInt(datasetId))] : undefined,
     enabled: Boolean(datasetId && !isNaN(parseInt(datasetId))),
   });
 
@@ -72,13 +72,13 @@ const VerifyPanel: React.FC = () => {
 
       // Convert contract data to Dataset type
       const dataset: Dataset = {
-        id: Number(datasetData[0]),
-        modelVersion: datasetData[1],
-        seed: datasetData[2],
-        dataHash: datasetData[3],
-        cid: datasetData[4],
-        owner: datasetData[5],
-        timestamp: Number(datasetData[6]),
+        id: Number(datasetData.id),
+        modelVersion: datasetData.modelVersion,
+        seed: datasetData.seed,
+        dataHash: datasetData.dataHash,
+        cid: datasetData.cid,
+        owner: datasetData.owner,
+        timestamp: Number(datasetData.timestamp),
       };
 
       // Compare hashes
