@@ -1,0 +1,18 @@
+{
+  "name": "verisynth",
+  "version": "1.0.0",
+  "description": "A verifiable synthetic data generator built on the 0G stack",
+  "main": "index.js",
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "preview": "cd frontend && npm run preview",
+    "compile": "cd contracts && npx hardhat compile",
+    "deploy": "cd contracts && npx hardhat run scripts/deploy.js",
+    "node": "cd contracts && npx hardhat node",
+    "test": "cd contracts && npx hardhat test"
+  },
+  "keywords": ["web3", "synthetic-data", "verification", "blockchain"],
+  "author": "VeriSynth Team",
+  "license": "MIT"
+}
