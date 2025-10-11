@@ -1,5 +1,5 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
+import * as React from 'react'
+import * as ReactDOM from 'react-dom/client'
 import { WagmiConfig } from 'wagmi'
 import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
