@@ -34,8 +34,8 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
 
   // Prepare contract write
   const { config } = usePrepareContractWrite({
-    address: CONTRACT_ADDRESS as `0x${string}`,
-    abi: CONTRACT_ABI,
+    address: CONTRACT_CONFIG.address,
+    abi: CONTRACT_CONFIG.abi,
     functionName: 'registerDataset',
     args: generatedDataset && uploadedCID ? [
       formData.modelVersion,

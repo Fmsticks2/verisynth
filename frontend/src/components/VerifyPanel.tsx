@@ -4,43 +4,8 @@ import { Icon } from '@iconify/react';
 import { useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
 import { computeDataHash } from '../utils/dataGenerator';
 import { Dataset, VerificationResult } from '../types';
+import { CONTRACT_CONFIG } from '../utils/contractConfig';
 import Modal from './Modal';
-
-// Contract ABI for verification
-const CONTRACT_ABI = [
-  {
-    "inputs": [{"internalType": "uint256", "name": "id", "type": "uint256"}],
-    "name": "getDataset",
-    "outputs": [{
-      "components": [
-        {"internalType": "uint256", "name": "id", "type": "uint256"},
-        {"internalType": "string", "name": "modelVersion", "type": "string"},
-        {"internalType": "string", "name": "seed", "type": "string"},
-        {"internalType": "string", "name": "dataHash", "type": "string"},
-        {"internalType": "string", "name": "cid", "type": "string"},
-        {"internalType": "address", "name": "owner", "type": "address"},
-        {"internalType": "uint256", "name": "timestamp", "type": "uint256"}
-      ],
-      "internalType": "struct DatasetRegistry.Dataset",
-      "name": "",
-      "type": "tuple"
-    }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "id", "type": "uint256"},
-      {"internalType": "string", "name": "computedHash", "type": "string"}
-    ],
-    "name": "verifyDataset",
-    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
-
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // This will be updated after deployment
 
 const VerifyPanel: React.FC = () => {
   const [datasetId, setDatasetId] = useState<string>('');
@@ -56,8 +21,8 @@ const VerifyPanel: React.FC = () => {
 
   // Fetch dataset from contract
   const { data: datasetData, isError: datasetError, refetch: refetchDataset } = useContractRead({
-    address: CONTRACT_ADDRESS as `0x${string}`,
-    abi: CONTRACT_ABI,
+    address: CONTRACT_CONFIG.address,
+    abi: CONTRACT_CONFIG.abi,
     functionName: 'getDataset',
     args: datasetId ? [parseInt(datasetId)] : undefined,
     enabled: Boolean(datasetId && !isNaN(parseInt(datasetId))),
