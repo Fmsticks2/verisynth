@@ -1,6 +1,65 @@
 // Contract configuration for VeriSynth
+
+// Network configurations
+export const NETWORK_CONFIG = {
+  localhost: {
+    chainId: 1337,
+    name: 'Localhost',
+    rpcUrl: import.meta.env.VITE_LOCALHOST_RPC_URL || 'http://127.0.0.1:8545',
+    nativeCurrency: {
+      name: 'Ether',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+    blockExplorer: 'http://localhost:8545',
+  },
+  sepolia: {
+    chainId: 11155111,
+    name: 'Sepolia',
+    rpcUrl: import.meta.env.VITE_SEPOLIA_RPC_URL || '',
+    nativeCurrency: {
+      name: 'Sepolia Ether',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+    blockExplorer: 'https://sepolia.etherscan.io',
+  },
+  mumbai: {
+    chainId: 80001,
+    name: 'Mumbai',
+    rpcUrl: import.meta.env.VITE_MUMBAI_RPC_URL || '',
+    nativeCurrency: {
+      name: 'MATIC',
+      symbol: 'MATIC',
+      decimals: 18,
+    },
+    blockExplorer: 'https://mumbai.polygonscan.com',
+  },
+  ogTestnet: {
+    chainId: 16602,
+    name: import.meta.env.VITE_OG_CHAIN_NAME || '0G-Galileo-Testnet',
+    rpcUrl: import.meta.env.VITE_OG_RPC_URL || 'https://evmrpc-testnet.0g.ai',
+    nativeCurrency: {
+      name: import.meta.env.VITE_OG_NATIVE_CURRENCY_NAME || 'OG',
+      symbol: import.meta.env.VITE_OG_NATIVE_CURRENCY_SYMBOL || 'OG',
+      decimals: parseInt(import.meta.env.VITE_OG_NATIVE_CURRENCY_DECIMALS || '18'),
+    },
+    blockExplorer: import.meta.env.VITE_OG_BLOCK_EXPLORER_URL || 'https://chainscan-galileo.0g.ai',
+    indexerUrl: import.meta.env.VITE_OG_INDEXER_URL || 'https://indexer-testnet.0g.ai',
+    storageUrl: import.meta.env.VITE_OG_STORAGE_URL || 'https://rpc-storage-testnet.0g.ai',
+  },
+} as const;
+
+// Contract addresses for different networks
+export const CONTRACT_ADDRESSES = {
+  localhost: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
+  sepolia: import.meta.env.VITE_DATASET_REGISTRY_ADDRESS_SEPOLIA || '',
+  mumbai: import.meta.env.VITE_DATASET_REGISTRY_ADDRESS_MUMBAI || '',
+  ogTestnet: import.meta.env.VITE_DATASET_REGISTRY_ADDRESS_OG || '',
+} as const;
+
 export const CONTRACT_CONFIG = {
-  address: '0x5FbDB2315678afecb367f032d93F642f64180aa3' as const,
+  address: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512' as const,
   abi: [
     {
       "type": "constructor",

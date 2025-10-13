@@ -1,0 +1,42 @@
+[build]
+  base = "frontend"
+  publish = "frontend/dist"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# Environment variables for Netlify deployment
+# These should be set in Netlify dashboard under Site settings > Environment variables
+# or can be configured here for reference
+
+# 0G Network Configuration
+# VITE_OG_RPC_URL = "https://evmrpc-testnet.0g.ai"
+# VITE_OG_CHAIN_ID = "16601"
+# VITE_OG_INDEXER_URL = "https://indexer-testnet.0g.ai"
+# VITE_OG_STORAGE_URL = "https://rpc-storage-testnet.0g.ai"
+# VITE_OG_BLOCK_EXPLORER_URL = "https://chainscan-galileo.0g.ai"
+# VITE_OG_CHAIN_NAME = "0G-Galileo-Testnet"
+# VITE_OG_NATIVE_CURRENCY_NAME = "OG"
+# VITE_OG_NATIVE_CURRENCY_SYMBOL = "OG"
+# VITE_OG_NATIVE_CURRENCY_DECIMALS = "18"
+
+# WalletConnect Project ID (required)
+# VITE_WALLETCONNECT_PROJECT_ID = "your_walletconnect_project_id_here"
+
+# Contract Addresses (update after deployment)
+# VITE_DATASET_REGISTRY_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+# VITE_DATASET_REGISTRY_ADDRESS_OG = "your_deployed_contract_address_on_0g"
+
+# Application Configuration
+# VITE_APP_NAME = "VeriSynth"
+# VITE_APP_DESCRIPTION = "Verifiable Synthetic Data Generation and Verification"
+# VITE_NODE_ENV = "production"
+
+# IPFS Configuration
+# VITE_IPFS_GATEWAY_URL = "https://ipfs.io/ipfs/"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
