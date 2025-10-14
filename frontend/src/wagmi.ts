@@ -6,7 +6,7 @@ import { NETWORK_CONFIG } from './utils/contractConfig';
 
 // Define 0G custom chain
 const ogTestnet = {
-  id: NETWORK_CONFIG.ogTestnet.chainId,
+  id: 16602,
   name: NETWORK_CONFIG.ogTestnet.name,
   network: '0g-testnet',
   nativeCurrency: NETWORK_CONFIG.ogTestnet.nativeCurrency,
