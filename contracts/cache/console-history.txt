@@ -1,0 +1,3 @@
+top\verisynth\contracts ; npx hardhat run scripts\veriy-deployment.js --network ogTestnet
+if ($env:TERM_PROGRAM-eq vscode") { $Global:__TraeInAgain=1; try { . "c:\Users\User\AppData\Local\Programs\Trae\resources\app\out\vs\workbench\contrib\terminal\common\scripts\shellIntegration.ps1" } catch{} }; Write-Output "[Trae] Shell integration is not enabled, try to fix it now."
+ c:\Users\User\Desktop\verisynth\contracts ; npx hardhat run scripts/verify-deployment.js --networkd c:\Use\User\Desktop\verisynth\contracts ; npx hardhat ru scipts\verify-deplomntj --netok osnet

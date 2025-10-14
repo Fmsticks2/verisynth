@@ -5,7 +5,6 @@ interface ImportMetaEnv {
   readonly VITE_WALLETCONNECT_PROJECT_ID: string
 
   // Contract Addresses
-  readonly VITE_DATASET_REGISTRY_ADDRESS: string
   readonly VITE_DATASET_REGISTRY_ADDRESS_SEPOLIA: string
   readonly VITE_DATASET_REGISTRY_ADDRESS_MUMBAI: string
   readonly VITE_DATASET_REGISTRY_ADDRESS_OG: string
