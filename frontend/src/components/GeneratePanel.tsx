@@ -53,6 +53,13 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
     hash: data?.hash,
   });
 
+  // Effect to trigger contract write when CID is available
+  React.useEffect(() => {
+    if (uploadedCID && generatedDataset && write && !isTransactionLoading) {
+      write();
+    }
+  }, [uploadedCID, generatedDataset, write, isTransactionLoading]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -116,12 +123,7 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
       const cid = await mockIPFSUpload(generatedDataset);
       setUploadedCID(cid);
       
-      // Wait a moment for the contract write to be prepared
-      setTimeout(() => {
-        if (write) {
-          write();
-        }
-      }, 500);
+      // The contract write will be triggered by the useEffect when CID is set
       
     } catch (error) {
       setModalContent({

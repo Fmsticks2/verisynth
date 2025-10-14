@@ -1,180 +1,199 @@
-import { ethers } from 'ethers';
 import { GeneratedDataset } from '../types';
+import { uploadDatasetToIPFS, smartUploadToIPFS } from './ipfsUpload';
 
-// Seeded random number generator
-class SeededRandom {
-  private seed: number;
+// Predefined data templates for different topics
+const DATA_TEMPLATES = {
+  users: () => ({
+    id: Math.floor(Math.random() * 10000),
+    name: generateRandomName(),
+    email: generateRandomEmail(),
+    age: Math.floor(Math.random() * 60) + 18,
+    city: generateRandomCity(),
+    joinDate: generateRandomDate(),
+    isActive: Math.random() > 0.3,
+  }),
+  products: () => ({
+    id: Math.floor(Math.random() * 10000),
+    name: generateRandomProductName(),
+    category: generateRandomCategory(),
+    price: Math.round((Math.random() * 1000 + 10) * 100) / 100,
+    inStock: Math.random() > 0.2,
+    rating: Math.round((Math.random() * 4 + 1) * 10) / 10,
+    description: generateRandomDescription(),
+  }),
+  sales: () => ({
+    id: Math.floor(Math.random() * 10000),
+    productId: Math.floor(Math.random() * 1000),
+    customerId: Math.floor(Math.random() * 5000),
+    quantity: Math.floor(Math.random() * 10) + 1,
+    amount: Math.round((Math.random() * 500 + 5) * 100) / 100,
+    date: generateRandomDate(),
+    region: generateRandomRegion(),
+  }),
+  financial: () => ({
+    id: Math.floor(Math.random() * 10000),
+    accountId: Math.floor(Math.random() * 100000),
+    transactionType: Math.random() > 0.5 ? 'credit' : 'debit',
+    amount: Math.round((Math.random() * 10000 + 1) * 100) / 100,
+    currency: generateRandomCurrency(),
+    timestamp: generateRandomDate(),
+    description: generateRandomTransactionDescription(),
+  }),
+};
 
-  constructor(seed: string) {
-    this.seed = this.hashCode(seed);
-  }
-
-  private hashCode(str: string): number {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    return Math.abs(hash);
-  }
-
-  next(): number {
-    this.seed = (this.seed * 9301 + 49297) % 233280;
-    return this.seed / 233280;
-  }
-
-  nextInt(min: number, max: number): number {
-    return Math.floor(this.next() * (max - min + 1)) + min;
-  }
-
-  nextFloat(min: number, max: number): number {
-    return this.next() * (max - min) + min;
-  }
-
-  choice<T>(array: T[]): T {
-    return array[Math.floor(this.next() * array.length)];
-  }
+// Helper functions for generating random data
+function generateRandomName(): string {
+  const firstNames = ['John', 'Jane', 'Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry'];
+  const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
+  return `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`;
 }
 
-// Sample data templates
-const SAMPLE_NAMES = [
-  'Alice Johnson', 'Bob Smith', 'Carol Davis', 'David Wilson', 'Eva Brown',
-  'Frank Miller', 'Grace Lee', 'Henry Taylor', 'Ivy Chen', 'Jack Anderson'
-];
+function generateRandomEmail(): string {
+  const domains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'company.com'];
+  const name = generateRandomName().toLowerCase().replace(' ', '.');
+  return `${name}@${domains[Math.floor(Math.random() * domains.length)]}`;
+}
 
-const SAMPLE_CITIES = [
-  'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix',
-  'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'San Jose'
-];
+function generateRandomCity(): string {
+  const cities = ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'San Jose'];
+  return cities[Math.floor(Math.random() * cities.length)];
+}
 
-const SAMPLE_PRODUCTS = [
-  'Laptop', 'Smartphone', 'Tablet', 'Headphones', 'Camera',
-  'Watch', 'Speaker', 'Monitor', 'Keyboard', 'Mouse'
-];
+function generateRandomDate(): string {
+  const start = new Date(2020, 0, 1);
+  const end = new Date();
+  const date = new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+  return date.toISOString().split('T')[0];
+}
 
-const SAMPLE_CATEGORIES = [
-  'Electronics', 'Clothing', 'Books', 'Home & Garden', 'Sports',
-  'Automotive', 'Health', 'Beauty', 'Toys', 'Food'
-];
+function generateRandomProductName(): string {
+  const adjectives = ['Premium', 'Deluxe', 'Standard', 'Professional', 'Advanced', 'Basic', 'Ultimate', 'Elite'];
+  const products = ['Widget', 'Gadget', 'Tool', 'Device', 'Component', 'Module', 'System', 'Solution'];
+  return `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${products[Math.floor(Math.random() * products.length)]}`;
+}
+
+function generateRandomCategory(): string {
+  const categories = ['Electronics', 'Clothing', 'Books', 'Home & Garden', 'Sports', 'Toys', 'Health', 'Beauty'];
+  return categories[Math.floor(Math.random() * categories.length)];
+}
+
+function generateRandomDescription(): string {
+  const descriptions = [
+    'High-quality product with excellent features',
+    'Durable and reliable for everyday use',
+    'Innovative design with modern functionality',
+    'Perfect for professional and personal use',
+    'Eco-friendly and sustainable option',
+  ];
+  return descriptions[Math.floor(Math.random() * descriptions.length)];
+}
+
+function generateRandomRegion(): string {
+  const regions = ['North', 'South', 'East', 'West', 'Central', 'Northeast', 'Southeast', 'Northwest', 'Southwest'];
+  return regions[Math.floor(Math.random() * regions.length)];
+}
+
+function generateRandomCurrency(): string {
+  const currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY'];
+  return currencies[Math.floor(Math.random() * currencies.length)];
+}
+
+function generateRandomTransactionDescription(): string {
+  const descriptions = [
+    'Online purchase',
+    'ATM withdrawal',
+    'Direct deposit',
+    'Wire transfer',
+    'Payment processing',
+    'Subscription fee',
+    'Refund processed',
+  ];
+  return descriptions[Math.floor(Math.random() * descriptions.length)];
+}
 
 export function generateSyntheticData(
   modelVersion: string,
   seed: string,
   topic: string,
-  recordCount: number = 100
+  recordCount: number
 ): GeneratedDataset {
-  const rng = new SeededRandom(seed);
-  const data: any[] = [];
-
-  // Generate data based on topic
-  for (let i = 0; i < recordCount; i++) {
-    let record: any = {};
-
-    switch (topic.toLowerCase()) {
-      case 'users':
-      case 'customers':
-        record = {
-          id: i + 1,
-          name: rng.choice(SAMPLE_NAMES),
-          email: `user${i + 1}@example.com`,
-          age: rng.nextInt(18, 80),
-          city: rng.choice(SAMPLE_CITIES),
-          registrationDate: new Date(
-            Date.now() - rng.nextInt(0, 365 * 24 * 60 * 60 * 1000)
-          ).toISOString().split('T')[0],
-          isActive: rng.next() > 0.3
-        };
-        break;
-
-      case 'products':
-      case 'inventory':
-        record = {
-          id: i + 1,
-          name: rng.choice(SAMPLE_PRODUCTS),
-          category: rng.choice(SAMPLE_CATEGORIES),
-          price: parseFloat(rng.nextFloat(10, 1000).toFixed(2)),
-          stock: rng.nextInt(0, 500),
-          rating: parseFloat(rng.nextFloat(1, 5).toFixed(1)),
-          inStock: rng.next() > 0.2
-        };
-        break;
-
-      case 'sales':
-      case 'transactions':
-        record = {
-          id: i + 1,
-          customerId: rng.nextInt(1, 1000),
-          productId: rng.nextInt(1, 100),
-          quantity: rng.nextInt(1, 10),
-          amount: parseFloat(rng.nextFloat(5, 500).toFixed(2)),
-          date: new Date(
-            Date.now() - rng.nextInt(0, 90 * 24 * 60 * 60 * 1000)
-          ).toISOString().split('T')[0],
-          status: rng.choice(['completed', 'pending', 'cancelled'])
-        };
-        break;
-
-      case 'financial':
-      case 'finance':
-        record = {
-          id: i + 1,
-          accountId: `ACC${String(i + 1).padStart(6, '0')}`,
-          balance: parseFloat(rng.nextFloat(100, 50000).toFixed(2)),
-          transactionType: rng.choice(['credit', 'debit']),
-          amount: parseFloat(rng.nextFloat(10, 5000).toFixed(2)),
-          timestamp: new Date(
-            Date.now() - rng.nextInt(0, 30 * 24 * 60 * 60 * 1000)
-          ).toISOString(),
-          description: rng.choice(['Payment', 'Transfer', 'Deposit', 'Withdrawal'])
-        };
-        break;
-
-      default:
-        // Generic data structure
-        record = {
-          id: i + 1,
-          value: parseFloat(rng.nextFloat(0, 1000).toFixed(2)),
-          category: rng.choice(['A', 'B', 'C', 'D']),
-          timestamp: new Date(
-            Date.now() - rng.nextInt(0, 365 * 24 * 60 * 60 * 1000)
-          ).toISOString(),
-          active: rng.next() > 0.5
-        };
-    }
-
-    data.push(record);
+  // Use seed for reproducible randomization
+  let seedValue = 0;
+  for (let i = 0; i < seed.length; i++) {
+    seedValue += seed.charCodeAt(i);
   }
-
-  const metadata = {
-    modelVersion,
-    seed,
-    topic,
-    generatedAt: Date.now()
+  
+  const seededRandom = function() {
+    seedValue = (seedValue * 9301 + 49297) % 233280;
+    return seedValue / 233280;
   };
 
-  // Create hash of the data
-  const dataString = JSON.stringify({ data, metadata });
-  const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(dataString));
+  const originalRandom = Math.random;
+  Math.random = seededRandom;
 
-  return {
-    data,
-    hash,
-    metadata
-  };
+  try {
+    // Determine the data template based on topic
+    const topicKey = topic.toLowerCase();
+    let template: () => any = DATA_TEMPLATES.users; // default
+
+    if (topicKey.includes('product')) template = DATA_TEMPLATES.products;
+    else if (topicKey.includes('sale')) template = DATA_TEMPLATES.sales;
+    else if (topicKey.includes('financial') || topicKey.includes('transaction')) template = DATA_TEMPLATES.financial;
+    else if (topicKey.includes('user') || topicKey.includes('customer')) template = DATA_TEMPLATES.users;
+
+    // Generate the data
+    const data = Array.from({ length: recordCount }, () => template());
+
+    // Create hash of the data
+    const dataString = JSON.stringify(data);
+    const hash = generateHash(dataString + seed + modelVersion);
+
+    return {
+      data,
+      hash,
+      metadata: {
+        modelVersion,
+        seed,
+        topic,
+        recordCount,
+        generatedAt: Date.now(),
+      },
+    };
+  } finally {
+    // Restore original Math.random
+    Math.random = originalRandom;
+  }
+}
+
+function generateHash(input: string): string {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    const char = input.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash).toString(16).padStart(8, '0');
 }
 
 export function computeDataHash(data: any): string {
   const dataString = JSON.stringify(data);
-  return ethers.utils.keccak256(ethers.utils.toUtf8Bytes(dataString));
+  return generateHash(dataString);
 }
 
-export function mockIPFSUpload(_data: any): Promise<string> {
-  // Mock IPFS upload - in a real implementation, this would upload to IPFS
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const mockCID = `Qm${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
-      resolve(mockCID);
-    }, 1000);
-  });
+// Replace the mock IPFS upload with real implementation
+export async function uploadToIPFS(data: any): Promise<string> {
+  try {
+    const result = await uploadDatasetToIPFS(data);
+    return result.cid;
+  } catch (error) {
+    console.error('IPFS upload failed:', error);
+    // Fallback to smart upload which includes simulation
+    const result = await smartUploadToIPFS(data);
+    return result.cid;
+  }
+}
+
+// Keep the old function name for backward compatibility but use real upload
+export function mockIPFSUpload(data: any): Promise<string> {
+  return uploadToIPFS(data);
 }

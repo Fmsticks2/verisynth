@@ -15,6 +15,7 @@ export interface GeneratedDataset {
     modelVersion: string;
     seed: string;
     topic: string;
+    recordCount: number;
     generatedAt: number;
   };
 }
