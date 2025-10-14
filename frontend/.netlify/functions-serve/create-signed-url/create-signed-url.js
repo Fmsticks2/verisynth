@@ -1,0 +1,1 @@
+module.exports = require('./Users/User/Desktop/verisynth/netlify/functions/create-signed-url.js')

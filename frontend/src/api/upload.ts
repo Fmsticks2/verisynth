@@ -1,11 +1,11 @@
-// API endpoint for creating signed upload URLs
-// This would typically be deployed as a serverless function or API route
+// Direct Pinata SDK usage for creating signed upload URLs in the frontend
 
 import { createSignedUploadUrl } from './pinata';
 
 export interface CreateSignedUrlRequest {
   expires?: number;
   mimeTypes?: string[];
+  maxFileSize?: number;
 }
 
 export interface CreateSignedUrlResponse {
@@ -18,14 +18,14 @@ export interface CreateSignedUrlResponse {
 }
 
 /**
- * API handler for creating signed upload URLs
- * This should be deployed as a serverless function to keep API keys secure
+ * Create signed upload URL directly using Pinata SDK
+ * Now safe to use in frontend with pinata.upload.public.createSignedURL
  */
 export async function handleCreateSignedUrl(
   request: CreateSignedUrlRequest
 ): Promise<CreateSignedUrlResponse> {
   try {
-    const { expires = 3600, mimeTypes } = request;
+    const { expires = 3600, mimeTypes, maxFileSize } = request;
 
     // Validate expires time (max 24 hours for security)
     if (expires > 86400) {
@@ -35,7 +35,7 @@ export async function handleCreateSignedUrl(
       };
     }
 
-    const result = await createSignedUploadUrl(expires, mimeTypes);
+    const result = await createSignedUploadUrl(expires, mimeTypes, maxFileSize);
 
     return {
       success: true,
@@ -50,51 +50,18 @@ export async function handleCreateSignedUrl(
   }
 }
 
-// For use in Vite/development environment
+/**
+ * Get signed upload URL directly using Pinata SDK
+ * No longer requires server-side endpoint or Netlify functions
+ */
 export async function getSignedUploadUrl(
   expires: number = 3600,
-  mimeTypes?: string[]
+  mimeTypes?: string[],
+  maxFileSize?: number
 ): Promise<string> {
   try {
-    // Check if we're in a development environment
-    if (import.meta.env.DEV) {
-      // In development, try to create signed URL directly (may fail due to CORS)
-      // This is a fallback approach for development
-      console.warn('Creating signed URL in client-side development mode. In production, this should be done server-side.');
-      
-      try {
-        const result = await createSignedUploadUrl(expires, mimeTypes);
-        return result.url;
-      } catch (error) {
-        console.warn('Client-side signed URL creation failed:', error);
-        throw new Error('Signed URL creation failed. Please configure a server-side endpoint for production use.');
-      }
-    } else {
-      // In production, make an HTTP request to the Netlify Function
-      const response = await fetch('/.netlify/functions/create-signed-url', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          expires,
-          mimeTypes
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to create signed URL');
-      }
-
-      return data.data.url;
-    }
+    const result = await createSignedUploadUrl(expires, mimeTypes, maxFileSize);
+    return result.url;
   } catch (error) {
     console.error('Failed to get signed upload URL:', error);
     throw error;

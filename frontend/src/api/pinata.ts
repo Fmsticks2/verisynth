@@ -1,9 +1,9 @@
 import { PinataSDK } from 'pinata';
 
-// Server-side Pinata client (uses different env var for security)
+// Frontend Pinata client using VITE environment variable
 const pinata = new PinataSDK({
-  pinataJwt: (typeof process !== 'undefined' ? process.env.PINATA_JWT : undefined) || import.meta.env.VITE_PINATA_JWT,
-  pinataGateway: 'gateway.pinata.cloud',
+  pinataJwt: import.meta.env.VITE_PINATA_JWT,
+  pinataGateway: import.meta.env.VITE_PINATA_GATEWAY_URL || 'gateway.pinata.cloud',
 });
 
 export interface SignedUrlResponse {
@@ -12,23 +12,25 @@ export interface SignedUrlResponse {
 }
 
 /**
- * Create a signed upload URL for Pinata
- * This should be called from a server-side endpoint to keep API keys secure
+ * Create a signed upload URL for Pinata directly in the frontend
+ * Uses the public method which is safe for client-side usage
  */
 export async function createSignedUploadUrl(
   expires: number = 3600, // 1 hour default
-  mimeTypes?: string[]
+  mimeTypes?: string[],
+  maxFileSize?: number
 ): Promise<SignedUrlResponse> {
   try {
     // Check if Pinata JWT is configured
-    const jwt = (typeof process !== 'undefined' ? process.env.PINATA_JWT : undefined) || import.meta.env.VITE_PINATA_JWT;
+    const jwt = import.meta.env.VITE_PINATA_JWT;
     if (!jwt || jwt === 'your_pinata_jwt_token_here') {
-      throw new Error('Pinata JWT token not configured. Please set PINATA_JWT environment variable.');
+      throw new Error('Pinata JWT token not configured. Please set VITE_PINATA_JWT environment variable.');
     }
 
-    const signedUrl = await pinata.upload.private.createSignedURL({
+    const signedUrl = await pinata.upload.public.createSignedURL({
       expires,
-      mimeTypes: mimeTypes || ['application/json', 'text/plain', '*/*']
+      mimeTypes: mimeTypes || ['application/json', 'text/plain', 'image/*', '*/*'],
+      maxFileSize: maxFileSize || 10 * 1024 * 1024 // 10MB default
     });
 
     return {

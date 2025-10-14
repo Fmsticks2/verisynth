@@ -4,7 +4,7 @@ import { getSignedUploadUrl } from '../api/upload';
 // Initialize Pinata client
 const pinata = new PinataSDK({
   pinataJwt: import.meta.env.VITE_PINATA_JWT,
-  pinataGateway: 'gateway.pinata.cloud',
+  pinataGateway: import.meta.env.VITE_PINATA_GATEWAY_URL || 'gateway.pinata.cloud',
 });
 
 export interface UploadResult {
@@ -38,14 +38,16 @@ export async function uploadToIPFS(data: any, filename?: string): Promise<Upload
       file = new File([blob], filename || 'dataset.json', { type: 'application/json' });
     }
 
-    // Get signed upload URL
-    const signedUrl = await getSignedUploadUrl(3600, [file.type, 'application/json', '*/*']);
+    // Get signed upload URL with appropriate file size limit
+    const maxFileSize = 10 * 1024 * 1024; // 10MB limit
+    const signedUrl = await getSignedUploadUrl(3600, [file.type, 'application/json', '*/*'], maxFileSize);
     
     // Upload using signed URL
     const uploadResult = await pinata.upload.public.file(file).url(signedUrl);
 
     const cid = uploadResult.cid;
-    const url = `https://gateway.pinata.cloud/ipfs/${cid}`;
+    const gatewayUrl = import.meta.env.VITE_PINATA_GATEWAY_URL || 'gateway.pinata.cloud';
+    const url = `https://${gatewayUrl}/ipfs/${cid}`;
 
     return {
       cid,
