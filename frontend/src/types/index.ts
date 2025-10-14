@@ -17,6 +17,9 @@ export interface GeneratedDataset {
     topic: string;
     recordCount: number;
     generatedAt: number;
+    actualCID?: string;
+    transactionHash?: string;
+    blockchainTimestamp?: number;
   };
 }
 

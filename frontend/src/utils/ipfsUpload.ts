@@ -3,7 +3,7 @@ import { PinataSDK } from 'pinata';
 // Initialize Pinata client
 const pinata = new PinataSDK({
   pinataJwt: import.meta.env.VITE_PINATA_JWT,
-  pinataGateway: import.meta.env.VITE_PINATA_GATEWAY_URL || 'gateway.pinata.cloud',
+  pinataGateway: 'gateway.pinata.cloud',
 });
 
 export interface UploadResult {
@@ -40,8 +40,7 @@ export async function uploadToIPFS(data: any, filename?: string): Promise<Upload
     }
 
     const cid = uploadResult.cid;
-    const gatewayUrl = import.meta.env.VITE_PINATA_GATEWAY_URL || 'gateway.pinata.cloud';
-    const url = `https://${gatewayUrl}/ipfs/${cid}`;
+    const url = `https://gateway.pinata.cloud/ipfs/${cid}`;
 
     return {
       cid,
@@ -50,6 +49,12 @@ export async function uploadToIPFS(data: any, filename?: string): Promise<Upload
     };
   } catch (error) {
     console.error('IPFS upload failed:', error);
+    
+    // Check if it's a CORS or network error (common in browser environments)
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      throw new Error('CORS_ERROR: Direct browser uploads to Pinata are blocked by CORS policy. Consider using signed upload URLs or server-side uploads.');
+    }
+    
     throw new Error(`Failed to upload to IPFS: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
@@ -108,7 +113,16 @@ export async function smartUploadToIPFS(data: any, filename?: string): Promise<U
     // Try real upload first
     return await uploadToIPFS(data, filename);
   } catch (error) {
-    console.warn('Real IPFS upload failed, falling back to simulation:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    // Check if it's a CORS error or configuration issue
+    if (errorMessage.includes('CORS_ERROR') || errorMessage.includes('not configured')) {
+      console.warn('Real IPFS upload failed, falling back to simulation:', errorMessage);
+      return await simulateIPFSUpload(data);
+    }
+    
+    // For other errors, still fall back but log the specific error
+    console.error('Real IPFS upload failed, falling back to simulation:', errorMessage);
     return await simulateIPFSUpload(data);
   }
 }

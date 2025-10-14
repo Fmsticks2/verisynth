@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Header from './components/Header';
 import GeneratePanel from './components/GeneratePanel';
 import VerifyPanel from './components/VerifyPanel';
+import DatasetHistory from './components/DatasetHistory';
 import DatasetCard from './components/DatasetCard';
 import { Dataset, GeneratedDataset } from './types';
 
-type ActiveTab = 'generate' | 'verify' | 'docs';
+type ActiveTab = 'generate' | 'verify' | 'history' | 'docs';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('generate');
@@ -64,6 +65,9 @@ const App: React.FC = () => {
       
       case 'verify':
         return <VerifyPanel />;
+      
+      case 'history':
+        return <DatasetHistory />;
       
       case 'docs':
         return (

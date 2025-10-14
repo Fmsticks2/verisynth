@@ -113,6 +113,29 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
     }
   };
 
+  const handleDownloadDataset = () => {
+    if (!generatedDataset) return;
+
+    const dataStr = JSON.stringify(generatedDataset, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `dataset_${generatedDataset.metadata.seed}_${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setModalContent({
+      type: 'success',
+      title: 'Download Started',
+      message: 'Dataset JSON file download has started.',
+    });
+    setShowModal(true);
+  };
+
   const handleUploadAndRegister = async () => {
     if (!generatedDataset || !isConnected) return;
 
@@ -138,26 +161,44 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
 
   // Handle transaction success
   React.useEffect(() => {
-    if (isSuccess) {
+    if (isSuccess && data?.hash) {
       setIsUploading(false);
+      
+      // Update the generated dataset with actual blockchain values
+      if (generatedDataset) {
+        const updatedDataset = {
+          ...generatedDataset,
+          metadata: {
+            ...generatedDataset.metadata,
+            actualCID: uploadedCID,
+            transactionHash: data.hash,
+            blockchainTimestamp: Date.now(),
+          }
+        };
+        setGeneratedDataset(updatedDataset);
+        onDatasetGenerated?.(updatedDataset);
+      }
+      
       setModalContent({
         type: 'success',
         title: 'Dataset Registered',
-        message: `Dataset successfully registered on-chain! Transaction: ${data?.hash}`,
+        message: `Dataset successfully registered on-chain! Transaction: ${data.hash.slice(0, 12)}...`,
       });
       setShowModal(true);
       
-      // Reset form
-      setGeneratedDataset(null);
-      setUploadedCID('');
-      setFormData({
-        modelVersion: 'v1.0.0',
-        seed: '',
-        topic: '',
-        recordCount: 100,
-      });
+      // Reset form after a delay to allow user to see the updated values
+      setTimeout(() => {
+        setGeneratedDataset(null);
+        setUploadedCID('');
+        setFormData({
+          modelVersion: 'v1.0.0',
+          seed: '',
+          topic: '',
+          recordCount: 100,
+        });
+      }, 3000);
     }
-  }, [isSuccess, data?.hash]);
+  }, [isSuccess, data?.hash, generatedDataset, uploadedCID, onDatasetGenerated]);
 
   return (
     <div className="space-y-6">
@@ -273,7 +314,7 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
           </div>
 
           <div className="bg-gray-50 rounded-xl p-4 mb-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
               <div>
                 <span className="text-gray-500">Records:</span>
                 <span className="ml-2 font-semibold">{generatedDataset.data.length}</span>
@@ -290,6 +331,24 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
                 <span className="text-gray-500">Topic:</span>
                 <span className="ml-2 font-semibold">{generatedDataset.metadata.topic}</span>
               </div>
+              <div>
+                <span className="text-gray-500">Generated:</span>
+                <span className="ml-2 font-semibold">
+                  {new Date(generatedDataset.metadata.generatedAt).toLocaleString()}
+                </span>
+              </div>
+              {generatedDataset.metadata.actualCID && (
+                <div className="col-span-2">
+                  <span className="text-gray-500">IPFS CID:</span>
+                  <span className="ml-2 font-mono text-xs break-all">{generatedDataset.metadata.actualCID}</span>
+                </div>
+              )}
+              {generatedDataset.metadata.transactionHash && (
+                <div className="col-span-2">
+                  <span className="text-gray-500">Transaction:</span>
+                  <span className="ml-2 font-mono text-xs break-all">{generatedDataset.metadata.transactionHash}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -300,7 +359,14 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
             </pre>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={handleDownloadDataset}
+              className="btn-secondary"
+            >
+              <Icon icon="ph:download" className="w-5 h-5 mr-2" />
+              Download JSON
+            </button>
             <button
               onClick={handleUploadAndRegister}
               disabled={!isConnected || isUploading || isTransactionLoading}
