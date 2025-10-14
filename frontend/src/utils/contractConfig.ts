@@ -52,18 +52,19 @@ export const NETWORK_CONFIG = {
 
 // Contract addresses for different networks
 export const CONTRACT_ADDRESSES = {
-  localhost: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
-  sepolia: import.meta.env.VITE_DATASET_REGISTRY_ADDRESS_SEPOLIA || '',
-  mumbai: import.meta.env.VITE_DATASET_REGISTRY_ADDRESS_MUMBAI || '',
-  ogTestnet: import.meta.env.VITE_DATASET_REGISTRY_ADDRESS_OG || '0xdc6c396319895dA489b0Cd145A4c5D660b9e10F6',
+  localhost: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512' as `0x${string}`,
+  sepolia: (import.meta.env.VITE_DATASET_REGISTRY_ADDRESS_SEPOLIA || '') as `0x${string}`,
+  mumbai: (import.meta.env.VITE_DATASET_REGISTRY_ADDRESS_MUMBAI || '') as `0x${string}`,
+  ogTestnet: (import.meta.env.VITE_DATASET_REGISTRY_ADDRESS_OG || '0xdc6c396319895dA489b0Cd145A4c5D660b9e10F6') as `0x${string}`,
 } as const;
 
 // Function to get contract address based on network
-export const getContractAddress = (network: keyof typeof CONTRACT_ADDRESSES): string => {
+export const getContractAddress = (network: keyof typeof CONTRACT_ADDRESSES): `0x${string}` => {
   return CONTRACT_ADDRESSES[network] || CONTRACT_ADDRESSES.localhost;
 };
 
 export const CONTRACT_CONFIG = {
+  address: getContractAddress('ogTestnet'),
   abi: [
     {
       "type": "constructor",
