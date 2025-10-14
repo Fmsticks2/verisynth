@@ -87,8 +87,8 @@ const App: React.FC = () => {
             <div className="prose prose-gray max-w-none">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">What is VeriSynth?</h3>
               <p className="text-gray-600 mb-6">
-                VeriSynth is a blockchain-based platform for generating, storing, and verifying synthetic datasets. 
-                It ensures data integrity through cryptographic hashing and provides immutable proof of dataset authenticity.
+                VeriSynth is a blockchain-based platform for generating, storing, and verifying synthetic datasets built on the 0G Network. 
+                It leverages 0G's AI-native infrastructure to ensure data integrity through cryptographic hashing and provides immutable proof of dataset authenticity with high-performance storage and data availability.
               </p>
 
               <h3 className="text-lg font-semibold text-gray-900 mb-4">How to Generate Datasets</h3>
@@ -105,7 +105,7 @@ const App: React.FC = () => {
                     </ul>
                   </li>
                   <li>Click "Generate Dataset" to create and register your dataset</li>
-                  <li>The dataset will be uploaded to IPFS and registered on the blockchain</li>
+                  <li>The dataset will be uploaded to 0G Storage Network and registered on the blockchain</li>
                 </ol>
               </div>
 
@@ -124,23 +124,103 @@ const App: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Technical Details</h3>
               <div className="bg-gray-50 rounded-xl p-6 mb-6">
                 <ul className="space-y-3 text-gray-600">
-                  <li><strong>Blockchain:</strong> Ethereum-compatible networks (Hardhat, Sepolia, Mumbai)</li>
-                  <li><strong>Storage:</strong> IPFS for decentralized file storage</li>
+                  <li><strong>Blockchain:</strong> 0G Network (0G-Galileo-Testnet) - AI-native Layer 1 blockchain optimized for AI applications</li>
+                  <li><strong>Performance:</strong> 2,500+ TPS with optimized CometBFT consensus mechanism</li>
+                  <li><strong>Storage:</strong> 0G Storage Network with Proof of Random Access (PoRA) consensus for decentralized data storage</li>
+                  <li><strong>Data Availability:</strong> 0G DA layer with quorum-based architecture for infinite scalability</li>
+                  <li><strong>Consensus:</strong> Byzantine Fault Tolerant (BFT) with modular architecture separating consensus from execution</li>
                   <li><strong>Hashing:</strong> SHA-256 for data integrity verification</li>
-                  <li><strong>Smart Contract:</strong> Solidity-based registry for dataset metadata</li>
-                  <li><strong>Frontend:</strong> React with TypeScript, Tailwind CSS, and Framer Motion</li>
+                  <li><strong>Smart Contract:</strong> Solidity-based registry for dataset metadata with EVM compatibility</li>
+                  <li><strong>Frontend:</strong> React with TypeScript, Tailwind CSS, Framer Motion, and Wagmi for Web3 integration</li>
                 </ul>
               </div>
 
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Security Features</h3>
-              <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6">
+              <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6 mb-6">
                 <ul className="space-y-3 text-gray-600">
-                  <li>✅ <strong>Immutable Records:</strong> Dataset metadata stored permanently on blockchain</li>
+                  <li>✅ <strong>Immutable Records:</strong> Dataset metadata stored permanently on 0G blockchain</li>
                   <li>✅ <strong>Cryptographic Verification:</strong> SHA-256 hashing ensures data integrity</li>
-                  <li>✅ <strong>Decentralized Storage:</strong> IPFS prevents single points of failure</li>
+                  <li>✅ <strong>Decentralized Storage:</strong> 0G Storage Network with PoRA consensus prevents single points of failure</li>
+                  <li>✅ <strong>High Performance:</strong> 2,500+ TPS with optimized consensus for AI workloads</li>
                   <li>✅ <strong>Ownership Tracking:</strong> Clear provenance and ownership records</li>
                   <li>✅ <strong>Reproducible Generation:</strong> Seeded random generation for consistency</li>
+                  <li>✅ <strong>AI-Native Infrastructure:</strong> Built specifically for AI applications and data-intensive workloads</li>
                 </ul>
+              </div>
+
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Current Technology Stack</h3>
+              <div className="bg-blue-50 rounded-xl p-6 mb-6">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">Blockchain Layer</h4>
+                    <ul className="space-y-1 text-gray-600 text-sm">
+                      <li>• 0G Network (Chain ID: 16602)</li>
+                      <li>• CometBFT consensus mechanism</li>
+                      <li>• EVM-compatible smart contracts</li>
+                      <li>• Byzantine Fault Tolerant validation</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">Storage & Data</h4>
+                    <ul className="space-y-1 text-gray-600 text-sm">
+                      <li>• 0G Storage Network with PoRA</li>
+                      <li>• 0G Data Availability layer</li>
+                      <li>• Decentralized storage at $10/TB</li>
+                      <li>• Infinite scalability architecture</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">Frontend Stack</h4>
+                    <ul className="space-y-1 text-gray-600 text-sm">
+                      <li>• React 18 with TypeScript</li>
+                      <li>• Tailwind CSS for styling</li>
+                      <li>• Framer Motion animations</li>
+                      <li>• Wagmi for Web3 integration</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">Development Tools</h4>
+                    <ul className="space-y-1 text-gray-600 text-sm">
+                      <li>• Vite for build tooling</li>
+                      <li>• RainbowKit wallet connector</li>
+                      <li>• Phosphor Icons library</li>
+                      <li>• Environment-based configuration</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Future Roadmap</h3>
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">🚀 Phase 1: Enhanced AI Integration</h4>
+                    <ul className="space-y-1 text-gray-600 text-sm ml-4">
+                      <li>• AI model training dataset optimization</li>
+                      <li>• Advanced synthetic data generation algorithms</li>
+                      <li>• Integration with 0G's AI computation layer</li>
+                      <li>• Real-time data quality assessment</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">🔧 Phase 2: Advanced Features</h4>
+                    <ul className="space-y-1 text-gray-600 text-sm ml-4">
+                      <li>• Multi-format dataset support (images, audio, video)</li>
+                      <li>• Collaborative dataset creation tools</li>
+                      <li>• Advanced privacy-preserving techniques</li>
+                      <li>• Cross-chain interoperability</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">🌐 Phase 3: Ecosystem Expansion</h4>
+                    <ul className="space-y-1 text-gray-600 text-sm ml-4">
+                      <li>• Marketplace for synthetic datasets</li>
+                      <li>• Integration with major AI/ML frameworks</li>
+                      <li>• Enterprise-grade analytics dashboard</li>
+                      <li>• Decentralized governance mechanisms</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>
