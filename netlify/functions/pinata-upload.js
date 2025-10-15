@@ -25,11 +25,13 @@ exports.handler = async (event) => {
 
   try {
     const token = process.env.PINATA_JWT || process.env.VITE_PINATA_JWT;
-    if (!token) {
+    const apiKey = process.env.PINATA_API_KEY || process.env.VITE_PINATA_API_KEY;
+    const apiSecret = process.env.PINATA_SECRET_API_KEY || process.env.VITE_PINATA_SECRET_API_KEY;
+    if (!token && !(apiKey && apiSecret)) {
       return {
         statusCode: 500,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Server misconfigured: PINATA_JWT not set' }),
+        body: JSON.stringify({ error: 'Server misconfigured: provide PINATA_JWT or PINATA_API_KEY & PINATA_SECRET_API_KEY' }),
       };
     }
 
@@ -54,12 +56,17 @@ exports.handler = async (event) => {
       // Pinata options can be extended here if needed
     };
 
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    } else {
+      headers.pinata_api_key = apiKey;
+      headers.pinata_secret_api_key = apiSecret;
+    }
+
     const resp = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
       body: JSON.stringify(pinPayload),
     });
 
