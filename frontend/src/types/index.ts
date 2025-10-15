@@ -6,6 +6,7 @@ export interface Dataset {
   cid: string;
   owner: string;
   timestamp: number;
+  verified?: boolean;
 }
 
 export interface GeneratedDataset {

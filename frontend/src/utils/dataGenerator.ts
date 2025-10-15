@@ -1,6 +1,15 @@
 import { GeneratedDataset } from '../types';
 import { uploadDatasetToIPFS, smartUploadToIPFS } from './ipfsUpload';
 
+// SHA-256 hashing helper
+async function sha256Hex(input: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  const bytes = new Uint8Array(digest);
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 // Predefined data templates for different topics
 const DATA_TEMPLATES = {
   users: () => ({
@@ -111,12 +120,12 @@ function generateRandomTransactionDescription(): string {
   return descriptions[Math.floor(Math.random() * descriptions.length)];
 }
 
-export function generateSyntheticData(
+export async function generateSyntheticData(
   modelVersion: string,
   seed: string,
   topic: string,
   recordCount: number
-): GeneratedDataset {
+): Promise<GeneratedDataset> {
   // Use seed for reproducible randomization
   let seedValue = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -146,7 +155,8 @@ export function generateSyntheticData(
 
     // Create hash of the data
     const dataString = JSON.stringify(data);
-    const hash = generateHash(dataString + seed + modelVersion);
+    // Use SHA-256 over JSON + seed + modelVersion for deterministic hash
+    const hash = await sha256Hex(dataString + seed + modelVersion);
 
     return {
       data,
@@ -165,19 +175,30 @@ export function generateSyntheticData(
   }
 }
 
-function generateHash(input: string): string {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    const char = input.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  return Math.abs(hash).toString(16).padStart(8, '0');
-}
+// Compute SHA-256 hash for verification. Accepts either raw array/object or a GeneratedDataset-like object.
+export async function computeDataHash(dataOrDataset: any): Promise<string> {
+  try {
+    // If the provided object looks like a GeneratedDataset, use its metadata
+    if (
+      dataOrDataset &&
+      typeof dataOrDataset === 'object' &&
+      Array.isArray(dataOrDataset.data) &&
+      dataOrDataset.metadata &&
+      typeof dataOrDataset.metadata.seed === 'string' &&
+      typeof dataOrDataset.metadata.modelVersion === 'string'
+    ) {
+      const payload = JSON.stringify(dataOrDataset.data) + dataOrDataset.metadata.seed + dataOrDataset.metadata.modelVersion;
+      return await sha256Hex(payload);
+    }
 
-export function computeDataHash(data: any): string {
-  const dataString = JSON.stringify(data);
-  return generateHash(dataString);
+    // Otherwise, compute hash over raw JSON string
+    const dataString = JSON.stringify(dataOrDataset);
+    return await sha256Hex(dataString);
+  } catch (err) {
+    // As a fallback, still attempt to compute over stringified input
+    const dataString = JSON.stringify(dataOrDataset);
+    return await sha256Hex(dataString);
+  }
 }
 
 // Replace the mock IPFS upload with real implementation

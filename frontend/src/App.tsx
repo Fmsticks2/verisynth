@@ -13,6 +13,12 @@ type ActiveTab = 'generate' | 'verify' | 'history' | 'docs';
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('generate');
   const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [lastGenerated, setLastGenerated] = useState<GeneratedDataset | null>(null);
+  const [verificationContext, setVerificationContext] = useState<{
+    datasetId?: number;
+    dataHash?: string;
+    datasetJson?: GeneratedDataset | null;
+  }>({});
 
   const handleDatasetGenerated = (generatedDataset: GeneratedDataset) => {
     // Convert GeneratedDataset to Dataset format for display
@@ -24,8 +30,11 @@ const App: React.FC = () => {
       cid: '', // Will be set after IPFS upload
       owner: '', // Will be set after blockchain registration
       timestamp: generatedDataset.metadata.generatedAt,
+      verified: false,
     };
-    setDatasets(prev => [dataset, ...prev]);
+    // Keep only the latest generated dataset in Recent Datasets
+    setDatasets([dataset]);
+    setLastGenerated(generatedDataset);
   };
 
   const renderContent = () => {
@@ -55,7 +64,18 @@ const App: React.FC = () => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {datasets.map((dataset) => (
-                    <DatasetCard key={dataset.id} dataset={dataset} />
+                    <DatasetCard
+                      key={dataset.id}
+                      dataset={dataset}
+                      onVerify={(id) => {
+                        setVerificationContext({
+                          datasetId: id,
+                          dataHash: dataset.dataHash,
+                          datasetJson: lastGenerated,
+                        });
+                        setActiveTab('verify');
+                      }}
+                    />
                   ))}
                 </div>
               </motion.div>
@@ -64,7 +84,17 @@ const App: React.FC = () => {
         );
       
       case 'verify':
-        return <VerifyPanel />;
+        return (
+          <VerifyPanel
+            initialDatasetId={verificationContext.datasetId}
+            initialDataHash={verificationContext.dataHash}
+            initialDatasetJson={verificationContext.datasetJson}
+            onVerified={(verified) => {
+              if (!datasets.length) return;
+              setDatasets([{ ...datasets[0], verified }]);
+            }}
+          />
+        );
       
       case 'history':
         return <DatasetHistory />;
@@ -117,11 +147,11 @@ const App: React.FC = () => {
               <div className="bg-gray-50 rounded-xl p-6 mb-6">
                 <ol className="list-decimal list-inside space-y-3 text-gray-600">
                   <li>Navigate to the "Verify" tab</li>
-                  <li>Enter the Dataset ID you want to verify</li>
-                  <li>Upload the JSON file containing the dataset</li>
-                  <li>Click "Verify Dataset" to check integrity</li>
-                  <li>The system will compare the uploaded data hash with the on-chain hash</li>
-                  <li>Results will show whether the dataset is authentic and unmodified</li>
+                  <li>Copy the <strong>Data Hash</strong> from the Generated Dataset card (or Recent Datasets) and paste it in the Data Hash field</li>
+                  <li>Upload the JSON file you downloaded during generation</li>
+                  <li>Click "Verify Dataset" to check integrity against the pasted Data Hash (and on-chain dataset if an ID is provided)</li>
+                  <li>The system compares the computed hash of your JSON to the provided Data Hash and, if available, the on-chain record</li>
+                  <li>Results show whether the dataset is authentic and unmodified; recent datasets are only marked verified after successful verification</li>
                 </ol>
               </div>
 
@@ -268,7 +298,7 @@ const App: React.FC = () => {
               </span>
             </div>
             <div className="text-sm text-gray-500">
-              © 2024 VeriSynth. Secure synthetic data generation and verification.
+              © 2025 VeriSynth. Secure synthetic data generation and verification.
             </div>
           </div>
         </div>

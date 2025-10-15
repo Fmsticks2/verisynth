@@ -80,14 +80,14 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
     try {
       // Simulate generation delay
       await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const dataset = generateSyntheticData(
+
+      const dataset = await generateSyntheticData(
         formData.modelVersion,
         formData.seed,
         formData.topic,
         formData.recordCount
       );
-      
+
       setGeneratedDataset(dataset);
       onDatasetGenerated?.(dataset);
       
@@ -319,6 +319,13 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
             <div className="flex items-center space-x-2 text-sm text-gray-500">
               <Icon icon="ph:hash" className="w-4 h-4" />
               <span className="font-mono">{generatedDataset.hash.slice(0, 12)}...</span>
+              <button
+                onClick={() => navigator.clipboard.writeText(generatedDataset.hash)}
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                title="Copy data hash"
+              >
+                <Icon icon="ph:copy" className="w-4 h-4 text-gray-500" />
+              </button>
             </div>
           </div>
 

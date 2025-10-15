@@ -1,16 +1,31 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
 import { useContractRead } from 'wagmi';
 import { computeDataHash } from '../utils/dataGenerator';
-import { Dataset, VerificationResult } from '../types';
+import { Dataset, VerificationResult, GeneratedDataset } from '../types';
 import { CONTRACT_CONFIG } from '../utils/contractConfig';
 import Modal from './Modal';
 
-const VerifyPanel: React.FC = () => {
-  const [datasetId, setDatasetId] = useState<string>('');
+interface VerifyPanelProps {
+  initialDatasetId?: number;
+  initialDataHash?: string;
+  initialDatasetJson?: GeneratedDataset | null;
+  onVerified?: (verified: boolean) => void;
+}
+
+const VerifyPanel: React.FC<VerifyPanelProps> = ({
+  initialDatasetId,
+  initialDataHash,
+  initialDatasetJson,
+  onVerified,
+}) => {
+  const [datasetId, setDatasetId] = useState<string>(initialDatasetId ? String(initialDatasetId) : '');
+  const [dataHash, setDataHash] = useState<string>(initialDataHash || '');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [attachedDataset, setAttachedDataset] = useState<GeneratedDataset | null>(initialDatasetJson || null);
+  const [useAttached, setUseAttached] = useState<boolean>(Boolean(initialDatasetJson));
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -29,6 +44,14 @@ const VerifyPanel: React.FC = () => {
     enabled: Boolean(datasetId && !isNaN(parseInt(datasetId))),
   });
 
+  useEffect(() => {
+    // Sync local state with incoming props when provided
+    if (initialDatasetId) setDatasetId(String(initialDatasetId));
+    if (typeof initialDataHash === 'string') setDataHash(initialDataHash);
+    setAttachedDataset(initialDatasetJson || null);
+    setUseAttached(Boolean(initialDatasetJson));
+  }, [initialDatasetId, initialDataHash, initialDatasetJson]);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -38,11 +61,12 @@ const VerifyPanel: React.FC = () => {
   };
 
   const handleVerify = async () => {
-    if (!datasetId || !uploadedFile) {
+    // Must have either attached dataset or an uploaded file
+    if (!attachedDataset && !uploadedFile) {
       setModalContent({
         type: 'error',
-        title: 'Missing Information',
-        message: 'Please provide both dataset ID and upload a file.',
+        title: 'Missing Dataset',
+        message: 'Attach a dataset from Recent Datasets or upload a JSON file.',
       });
       setShowModal(true);
       return;
@@ -51,45 +75,53 @@ const VerifyPanel: React.FC = () => {
     setIsVerifying(true);
     
     try {
-      // Read and parse the uploaded file
-      const fileContent = await uploadedFile.text();
-      let parsedData;
-      
-      try {
-        parsedData = JSON.parse(fileContent);
-      } catch (parseError) {
-        throw new Error('Invalid JSON file format');
+      // Acquire JSON source
+      let parsedData: unknown;
+      if (useAttached && attachedDataset) {
+        parsedData = attachedDataset.data;
+      } else if (uploadedFile) {
+        const fileContent = await uploadedFile.text();
+        try {
+          parsedData = JSON.parse(fileContent);
+        } catch (parseError) {
+          throw new Error('Invalid JSON file format');
+        }
       }
 
-      // Compute hash of uploaded data
-      const computedHash = computeDataHash(parsedData);
-      
-      // Fetch dataset from blockchain
-      await refetchDataset();
-      
-      if (datasetError || !datasetData) {
-        throw new Error('Dataset not found on blockchain');
+      // Compute hash of provided data (supports full dataset JSON with metadata)
+      const computedHash = await computeDataHash(
+        useAttached && attachedDataset ? attachedDataset : parsedData
+      );
+
+      // Optional: Fetch dataset from blockchain if ID provided
+      let onChainDataset: Dataset | null = null;
+      if (datasetId) {
+        await refetchDataset();
+        if (!datasetError && datasetData) {
+          onChainDataset = {
+            id: Number(datasetData.id),
+            modelVersion: datasetData.modelVersion,
+            seed: datasetData.seed,
+            dataHash: datasetData.dataHash,
+            cid: datasetData.cid,
+            owner: datasetData.owner,
+            timestamp: Number(datasetData.timestamp),
+          };
+        }
       }
 
-      // Convert contract data to Dataset type
-      const dataset: Dataset = {
-        id: Number(datasetData.id),
-        modelVersion: datasetData.modelVersion,
-        seed: datasetData.seed,
-        dataHash: datasetData.dataHash,
-        cid: datasetData.cid,
-        owner: datasetData.owner,
-        timestamp: Number(datasetData.timestamp),
-      };
+      // Evaluate matches
+      const providedHashMatch = dataHash ? dataHash === computedHash : null;
+      const onChainMatch = onChainDataset ? onChainDataset.dataHash === computedHash : null;
 
-      // Compare hashes
-      const verified = dataset.dataHash === computedHash;
-      
+      // Determine overall verification outcome
+      const verified = onChainDataset ? Boolean(onChainMatch) : Boolean(providedHashMatch);
+
       const result: VerificationResult = {
         verified,
-        onChainHash: dataset.dataHash,
+        onChainHash: onChainDataset?.dataHash || dataHash || '',
         computedHash,
-        dataset,
+        dataset: onChainDataset || undefined,
       };
       
       setVerificationResult(result);
@@ -98,10 +130,11 @@ const VerifyPanel: React.FC = () => {
         type: verified ? 'success' : 'error',
         title: verified ? 'Verification Successful' : 'Verification Failed',
         message: verified 
-          ? 'The dataset matches the on-chain hash perfectly!'
-          : 'The dataset does not match the on-chain hash. The data may have been modified.',
+          ? 'The dataset matches the expected hash.'
+          : 'The dataset does not match the expected hash. Ensure you used the correct JSON and hash.',
       });
       setShowModal(true);
+      onVerified?.(verified);
       
     } catch (error) {
       setModalContent({
@@ -110,6 +143,7 @@ const VerifyPanel: React.FC = () => {
         message: error instanceof Error ? error.message : 'An unexpected error occurred during verification.',
       });
       setShowModal(true);
+      onVerified?.(false);
     } finally {
       setIsVerifying(false);
     }
@@ -138,53 +172,123 @@ const VerifyPanel: React.FC = () => {
         </div>
 
         <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Dataset ID
-            </label>
-            <input
-              type="number"
-              value={datasetId}
-              onChange={(e) => setDatasetId(e.target.value)}
-              className="input-field"
-              placeholder="Enter dataset ID (e.g., 1)"
-              min="1"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Dataset ID (optional)
+              </label>
+              <input
+                type="number"
+                value={datasetId}
+                onChange={(e) => setDatasetId(e.target.value)}
+                className="input-field"
+                placeholder="Enter dataset ID (e.g., 1)"
+                min="1"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Data Hash (optional)
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={dataHash}
+                  onChange={(e) => setDataHash(e.target.value)}
+                  className="input-field flex-1"
+                  placeholder="Paste the data hash here"
+                />
+                <button
+                  onClick={() => navigator.clipboard.readText().then(text => setDataHash(text)).catch(() => {})}
+                  className="btn-secondary text-sm px-3"
+                  title="Paste from clipboard"
+                >
+                  <Icon icon="ph:clipboard-text" className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Upload Dataset File
+              Dataset Source
             </label>
-            <div className="relative">
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleFileUpload}
-                className="hidden"
-                id="file-upload"
-              />
-              <label
-                htmlFor="file-upload"
-                className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl hover:border-primary-400 transition-colors cursor-pointer"
-              >
-                <div className="text-center">
-                  <Icon icon="ph:upload-simple" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">
-                    {uploadedFile ? uploadedFile.name : 'Click to upload JSON file'}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    JSON files only
-                  </p>
+            {attachedDataset ? (
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Icon icon="ph:link" className="w-5 h-5 text-gray-500" />
+                    <span className="text-sm text-gray-700">Using dataset from Recent Datasets</span>
+                  </div>
+                  <label className="inline-flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useAttached}
+                      onChange={(e) => setUseAttached(e.target.checked)}
+                      className="rounded"
+                    />
+                    <span className="text-sm text-gray-600">Use attached dataset</span>
+                  </label>
                 </div>
-              </label>
-            </div>
+                {!useAttached && (
+                  <div className="mt-4">
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept=".json"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        id="file-upload"
+                      />
+                      <label
+                        htmlFor="file-upload"
+                        className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl hover:border-primary-400 transition-colors cursor-pointer"
+                      >
+                        <div className="text-center">
+                          <Icon icon="ph:upload-simple" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">
+                            {uploadedFile ? uploadedFile.name : 'Click to upload JSON file'}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            JSON files only
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl hover:border-primary-400 transition-colors cursor-pointer"
+                >
+                  <div className="text-center">
+                    <Icon icon="ph:upload-simple" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-600">
+                      {uploadedFile ? uploadedFile.name : 'Click to upload JSON file'}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      JSON files only
+                    </p>
+                  </div>
+                </label>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end">
             <button
               onClick={handleVerify}
-              disabled={!datasetId || !uploadedFile || isVerifying}
+              disabled={(useAttached ? !attachedDataset : !uploadedFile) || isVerifying}
               className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isVerifying ? (
@@ -249,9 +353,18 @@ const VerifyPanel: React.FC = () => {
               </div>
               <div className="bg-gray-50 rounded-xl p-4">
                 <h4 className="font-medium text-gray-900 mb-2">Computed Hash</h4>
-                <p className="text-sm font-mono text-gray-600 break-all">
-                  {verificationResult.computedHash}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-mono text-gray-600 break-all">
+                    {verificationResult.computedHash}
+                  </p>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(verificationResult.computedHash)}
+                    className="p-1 hover:bg-gray-200 rounded transition-colors"
+                    title="Copy computed hash"
+                  >
+                    <Icon icon="ph:copy" className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
               </div>
             </div>
 

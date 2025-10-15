@@ -2,12 +2,13 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { useAccount, useContractRead } from 'wagmi';
+import { useAccount, useContractRead, usePublicClient } from 'wagmi';
 import { CONTRACT_CONFIG } from '../utils/contractConfig';
 import { Dataset } from '../types';
 
 const DatasetHistory: React.FC = () => {
   const { address, isConnected } = useAccount();
+  const publicClient = usePublicClient();
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -30,20 +31,37 @@ const DatasetHistory: React.FC = () => {
 
       setIsLoading(true);
       try {
-        const datasetPromises = datasetIds.map(async (id: bigint) => {
-          // This would need to be implemented with individual contract reads
-          // For now, we'll create mock data based on the ID
-          return {
-            id: Number(id),
-            modelVersion: 'v1.0.0',
-            seed: `seed_${id}`,
-            dataHash: `0x${id.toString(16).padStart(64, '0')}`,
-            cid: `Qm${id.toString(16).padStart(44, '0')}`,
-            owner: address || '',
-            timestamp: Date.now() - Number(id) * 86400000, // Mock timestamps
-          } as Dataset;
+        const datasetPromises = (datasetIds as bigint[]).map(async (id: bigint) => {
+          try {
+            const result: any = await publicClient.readContract({
+              address: CONTRACT_CONFIG.address,
+              abi: CONTRACT_CONFIG.abi,
+              functionName: 'getDataset',
+              args: [id],
+            });
+            return {
+              id: Number(result.id ?? id),
+              modelVersion: String(result.modelVersion ?? ''),
+              seed: String(result.seed ?? ''),
+              dataHash: String(result.dataHash ?? ''),
+              cid: String(result.cid ?? ''),
+              owner: String(result.owner ?? address ?? ''),
+              timestamp: Number(result.timestamp ?? Date.now()),
+            } as Dataset;
+          } catch (err) {
+            console.error('Failed to read dataset', id, err);
+            return {
+              id: Number(id),
+              modelVersion: '',
+              seed: '',
+              dataHash: '',
+              cid: '',
+              owner: address || '',
+              timestamp: Date.now(),
+            } as Dataset;
+          }
         });
-
+        
         const fetchedDatasets = await Promise.all(datasetPromises);
         setDatasets(fetchedDatasets);
       } catch (error) {

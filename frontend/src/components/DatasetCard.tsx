@@ -54,13 +54,17 @@ const DatasetCard: React.FC<DatasetCardProps> = ({ dataset, onVerify }) => {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Icon
-            icon="ic:baseline-verified"
-            className="w-5 h-5 text-green-500"
-          />
-          <span className="text-sm font-medium text-green-600">
-            Verified
-          </span>
+          {dataset.verified ? (
+            <>
+              <Icon icon="ic:baseline-verified" className="w-5 h-5 text-green-500" />
+              <span className="text-sm font-medium text-green-600">Verified</span>
+            </>
+          ) : (
+            <>
+              <Icon icon="ph:shield-warning" className="w-5 h-5 text-yellow-500" />
+              <span className="text-sm font-medium text-yellow-600">Not Verified</span>
+            </>
+          )}
         </div>
       </div>
 
@@ -100,6 +104,15 @@ const DatasetCard: React.FC<DatasetCardProps> = ({ dataset, onVerify }) => {
             >
               <Icon icon="ph:copy" className="w-4 h-4 text-gray-500" />
             </button>
+            {onVerify && (
+              <button
+                onClick={() => onVerify(dataset.id)}
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                title="Verify dataset"
+              >
+                <Icon icon="ic:baseline-verified" className="w-4 h-4 text-gray-500" />
+              </button>
+            )}
           </div>
         </div>
 
