@@ -47,11 +47,21 @@ exports.handler = async (event) => {
     }
 
     // Build pinJSONToIPFS payload
+    // Enforce max 10 keyvalues per Pinata constraints
+    const limitKeyvalues = (kv = {}, max = 10) => {
+      const keys = Object.keys(kv);
+      const out = {};
+      for (const key of keys.slice(0, max)) {
+        out[key] = kv[key];
+      }
+      return out;
+    };
+
     const pinPayload = {
       pinataContent: data,
       pinataMetadata: {
         name: (metadata && metadata.name) || filename || 'dataset.json',
-        keyvalues: (metadata && metadata.keyvalues) || {},
+        keyvalues: limitKeyvalues((metadata && metadata.keyvalues) || {}, 10),
       },
       // Pinata options can be extended here if needed
     };

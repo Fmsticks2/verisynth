@@ -85,25 +85,53 @@ export async function uploadToIPFS(data: any, options: UploadOptions = {}): Prom
     });
 
     const uploadOptions: any = {};
+
+    // Helper to enforce Pinata's 10 keyvalues limit with sensible priority
+    const limitKeyvalues = (kv: Record<string, string | number> = {}, max: number = 10) => {
+      const priority = [
+        'type',
+        'version',
+        'recordCount',
+        'dataSize',
+        'uploadedAt',
+        'source',
+        'sessionId',
+        'fileSize',
+        'fileType',
+        'originalFilename',
+      ];
+      const mergedKeys = Object.keys(kv);
+      const out: Record<string, string | number> = {};
+      // Add priority keys first
+      for (const key of priority) {
+        if (key in kv && Object.keys(out).length < max) {
+          out[key] = kv[key];
+        }
+      }
+      // Fill the rest with remaining keys
+      for (const key of mergedKeys) {
+        if (Object.keys(out).length >= max) break;
+        if (!(key in out)) {
+          out[key] = kv[key];
+        }
+      }
+      return out;
+    };
     
     if (options.metadata) {
       if (options.metadata.name) {
         uploadOptions.name = sanitizeFilename(options.metadata.name);
       }
-      if (options.metadata.keyvalues) {
-        // Merge with secure metadata
-        uploadOptions.keyvalues = {
-          ...secureMetadata,
-          ...options.metadata.keyvalues,
-        };
-      } else {
-        uploadOptions.keyvalues = secureMetadata;
-      }
+      const mergedKV = {
+        ...secureMetadata,
+        ...(options.metadata.keyvalues || {}),
+      };
+      uploadOptions.keyvalues = limitKeyvalues(mergedKV, 10);
       if (options.metadata.groupId) {
         uploadOptions.groupId = options.metadata.groupId;
       }
     } else {
-      uploadOptions.keyvalues = secureMetadata;
+      uploadOptions.keyvalues = limitKeyvalues(secureMetadata, 10);
     }
 
     // Upload via Netlify Function to avoid CORS and protect JWT
