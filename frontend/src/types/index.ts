@@ -18,9 +18,11 @@ export interface GeneratedDataset {
     topic: string;
     recordCount: number;
     generatedAt: number;
+    extraEntropy?: string;
     actualCID?: string;
     transactionHash?: string;
     blockchainTimestamp?: number;
+    quality?: QualityMetrics;
   };
 }
 
@@ -33,4 +35,13 @@ export interface VerificationResult {
   onChainHash: string;
   computedHash: string;
   dataset?: Dataset;
+}
+
+export interface QualityMetrics {
+  recordCount: number;
+  duplicateRatio: number;
+  nullRatio: number;
+  numericFieldStats: Record<string, { min: number; max: number; mean: number }>;
+  categoricalUniques: Record<string, number>;
+  score: number; // 0-100 simple quality score
 }

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Icon } from '@iconify/react';
 
-type ActiveTab = 'generate' | 'verify' | 'history' | 'docs';
+type ActiveTab = 'generate' | 'verify' | 'history' | 'marketplace' | 'analytics' | 'governance' | 'docs';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -47,6 +47,9 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
               { id: 'generate' as const, label: 'Generate', icon: 'ph:plus-circle-bold' },
               { id: 'verify' as const, label: 'Verify', icon: 'ph:shield-check-bold' },
               { id: 'history' as const, label: 'History', icon: 'ph:clock-clockwise-bold' },
+              { id: 'marketplace' as const, label: 'Marketplace', icon: 'ph:storefront' },
+              { id: 'analytics' as const, label: 'Analytics', icon: 'ph:chart-bar' },
+              { id: 'governance' as const, label: 'Governance', icon: 'ph:hand-waving' },
               { id: 'docs' as const, label: 'Docs', icon: 'ph:book-open-bold' },
             ].map((item) => (
               <button

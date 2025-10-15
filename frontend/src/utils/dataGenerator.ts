@@ -124,12 +124,15 @@ export async function generateSyntheticData(
   modelVersion: string,
   seed: string,
   topic: string,
-  recordCount: number
+  recordCount: number,
+  options?: { extraEntropy?: string; algorithm?: 'basic' | 'advanced' }
 ): Promise<GeneratedDataset> {
   // Use seed for reproducible randomization
   let seedValue = 0;
-  for (let i = 0; i < seed.length; i++) {
-    seedValue += seed.charCodeAt(i);
+  const entropy = options?.extraEntropy || '';
+  const mix = seed + '|' + modelVersion + '|' + topic + '|' + String(recordCount) + '|' + entropy;
+  for (let i = 0; i < mix.length; i++) {
+    seedValue += mix.charCodeAt(i);
   }
   
   const seededRandom = function() {
@@ -151,12 +154,35 @@ export async function generateSyntheticData(
     else if (topicKey.includes('user') || topicKey.includes('customer')) template = DATA_TEMPLATES.users;
 
     // Generate the data
-    const data = Array.from({ length: recordCount }, () => template());
+    let data = Array.from({ length: recordCount }, () => template());
+
+    // Optional advanced algorithm: shuffle and mutate slight fields
+    if (options?.algorithm === 'advanced') {
+      // Fisher–Yates shuffle for added variability
+      for (let i = data.length - 1; i > 0; i--) {
+        const j = Math.floor(seededRandom() * (i + 1));
+        [data[i], data[j]] = [data[j], data[i]];
+      }
+      // Light, deterministic mutation based on seeded random
+      data = data.map((row) => {
+        const mutated = { ...row };
+        for (const key of Object.keys(mutated)) {
+          const val = (mutated as any)[key];
+          if (typeof val === 'number') {
+            const delta = Math.floor(seededRandom() * 10) - 5; // -5..+4
+            (mutated as any)[key] = Math.max(0, val + delta);
+          } else if (typeof val === 'string' && val.length > 0 && seededRandom() > 0.9) {
+            (mutated as any)[key] = val + '-' + Math.floor(seededRandom() * 1000);
+          }
+        }
+        return mutated;
+      });
+    }
 
     // Create hash of the data
     const dataString = JSON.stringify(data);
     // Use SHA-256 over JSON + seed + modelVersion for deterministic hash
-    const hash = await sha256Hex(dataString + seed + modelVersion);
+    const hash = await sha256Hex(dataString + seed + modelVersion + entropy);
 
     return {
       data,
@@ -167,6 +193,7 @@ export async function generateSyntheticData(
         topic,
         recordCount,
         generatedAt: Date.now(),
+        extraEntropy: entropy || undefined,
       },
     };
   } finally {
@@ -187,7 +214,8 @@ export async function computeDataHash(dataOrDataset: any): Promise<string> {
       typeof dataOrDataset.metadata.seed === 'string' &&
       typeof dataOrDataset.metadata.modelVersion === 'string'
     ) {
-      const payload = JSON.stringify(dataOrDataset.data) + dataOrDataset.metadata.seed + dataOrDataset.metadata.modelVersion;
+      const extraEntropy = typeof dataOrDataset.metadata.extraEntropy === 'string' ? dataOrDataset.metadata.extraEntropy : '';
+      const payload = JSON.stringify(dataOrDataset.data) + dataOrDataset.metadata.seed + dataOrDataset.metadata.modelVersion + extraEntropy;
       return await sha256Hex(payload);
     }
 

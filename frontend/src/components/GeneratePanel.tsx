@@ -2,8 +2,11 @@ import * as React from 'react';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { useContractWrite, usePrepareContractWrite, useWaitForTransaction, useAccount } from 'wagmi';
-import { generateSyntheticData, mockIPFSUpload } from '../utils/dataGenerator';
+import { useContractWrite, usePrepareContractWrite, useWaitForTransaction, useAccount, usePublicClient } from 'wagmi';
+import { generateSyntheticData } from '../utils/dataGenerator';
+import { uploadDatasetToIPFS } from '../utils/ipfsUpload';
+import { getOgEntropy } from '../utils/ogCompute';
+import { assessQuality } from '../utils/dataQuality';
 import { GeneratedDataset } from '../types';
 import { CONTRACT_CONFIG } from '../utils/contractConfig';
 import Modal from './Modal';
@@ -26,6 +29,9 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedCID, setUploadedCID] = useState<string>('');
+  const [useOgEntropy, setUseOgEntropy] = useState<boolean>(true);
+  const [useAdvancedAlgo, setUseAdvancedAlgo] = useState<boolean>(true);
+  const publicClient = usePublicClient();
   const [showModal, setShowModal] = useState(false);
   const [modalContent, setModalContent] = useState<{
     type: 'success' | 'error' | 'info';
@@ -81,20 +87,36 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
       // Simulate generation delay
       await new Promise(resolve => setTimeout(resolve, 1500));
 
+      let extraEntropy = '';
+      if (useOgEntropy && publicClient) {
+        extraEntropy = await getOgEntropy(publicClient as any);
+      }
+
       const dataset = await generateSyntheticData(
         formData.modelVersion,
         formData.seed,
         formData.topic,
-        formData.recordCount
+        formData.recordCount,
+        { extraEntropy, algorithm: useAdvancedAlgo ? 'advanced' : 'basic' }
       );
 
-      setGeneratedDataset(dataset);
-      onDatasetGenerated?.(dataset);
+      // Assess quality metrics and attach
+      const quality = assessQuality(dataset.data);
+      const withQuality: GeneratedDataset = {
+        ...dataset,
+        metadata: {
+          ...dataset.metadata,
+          quality,
+        },
+      };
+
+      setGeneratedDataset(withQuality);
+      onDatasetGenerated?.(withQuality);
       
       setModalContent({
         type: 'success',
         title: 'Dataset Generated',
-        message: `Successfully generated ${dataset.data.length} records with hash: ${dataset.hash.slice(0, 12)}...`,
+        message: `Successfully generated ${withQuality.data.length} records with hash: ${withQuality.hash.slice(0, 12)}...`,
       });
       setShowModal(true);
     } catch (error) {
@@ -132,14 +154,75 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
     setShowModal(true);
   };
 
+  const handleDownloadCSV = () => {
+    if (!generatedDataset) return;
+    const rows = generatedDataset.data;
+    if (!rows.length) return;
+    const headers = Object.keys(rows[0]);
+    const csv = [headers.join(',')]
+      .concat(rows.map((r: any) => headers.map((h) => JSON.stringify(r[h] ?? '')).join(',')))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dataset_${generatedDataset.metadata.seed}_${Date.now()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadNDJSON = () => {
+    if (!generatedDataset) return;
+    const ndjson = generatedDataset.data.map((r) => JSON.stringify(r)).join('\n');
+    const blob = new Blob([ndjson], { type: 'application/x-ndjson' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dataset_${generatedDataset.metadata.seed}_${Date.now()}.ndjson`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadHFDataset = () => {
+    if (!generatedDataset) return;
+    const payload = {
+      dataset: generatedDataset.data,
+      dataset_info: {
+        description: `VeriSynth synthetic dataset generated with model ${generatedDataset.metadata.modelVersion}`,
+        features: Object.keys(generatedDataset.data[0] || {}).map((k) => ({ name: k, dtype: 'auto' })),
+        size: generatedDataset.data.length,
+        seed: generatedDataset.metadata.seed,
+        topic: generatedDataset.metadata.topic,
+        recordCount: generatedDataset.metadata.recordCount,
+        generatedAt: generatedDataset.metadata.generatedAt,
+        hash: generatedDataset.hash,
+        cid: generatedDataset.metadata.actualCID || '',
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `huggingface_dataset_${generatedDataset.metadata.seed}_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleUploadAndRegister = async () => {
     if (!generatedDataset || !isConnected || hasInitiatedTransaction) return;
 
     setIsUploading(true);
     
     try {
-      // Mock IPFS upload
-      const cid = await mockIPFSUpload(generatedDataset);
+      // Upload dataset to IPFS via signed URL flow
+      const result = await uploadDatasetToIPFS(generatedDataset);
+      const cid = result.cid;
       setUploadedCID(cid);
       
       // Trigger the contract write only once
@@ -284,6 +367,40 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
               className="input-field"
             />
           </div>
+
+          <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex items-center justify-between p-3 border rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Use 0G entropy</p>
+                <p className="text-xs text-gray-500">Fetch randomness from 0G chain to diversify data.</p>
+              </div>
+              <label className="inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useOgEntropy}
+                  onChange={(e) => setUseOgEntropy(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:bg-primary-600 transition-colors"></div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Advanced algorithm</p>
+                <p className="text-xs text-gray-500">Shuffle and mutate records using entropy-driven logic.</p>
+              </div>
+              <label className="inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useAdvancedAlgo}
+                  onChange={(e) => setUseAdvancedAlgo(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:bg-primary-600 transition-colors"></div>
+              </label>
+            </div>
+          </div>
         </div>
 
         <div className="flex justify-end mt-6">
@@ -368,6 +485,50 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
             </div>
           </div>
 
+          {generatedDataset.metadata.quality && (
+            <div className="bg-blue-50 rounded-xl p-4 mb-4">
+              <div className="flex items-center space-x-2 mb-3">
+                <Icon icon="ph:gauge" className="w-5 h-5 text-blue-600" />
+                <span className="text-sm font-semibold text-blue-800">Data Quality</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600">Quality Score:</span>
+                  <span className="ml-2 font-semibold">{Math.round((generatedDataset.metadata.quality.score || 0) * 100) / 100}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Duplicates:</span>
+                  <span className="ml-2 font-semibold">{Math.round(generatedDataset.metadata.quality.duplicateRatio * 100)}%</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Nulls:</span>
+                  <span className="ml-2 font-semibold">{Math.round(generatedDataset.metadata.quality.nullRatio * 100)}%</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Records:</span>
+                  <span className="ml-2 font-semibold">{generatedDataset.metadata.quality.recordCount}</span>
+                </div>
+              </div>
+              {/* Show a couple of numeric field summaries if available */}
+              {generatedDataset.metadata.quality.numericFieldStats && Object.keys(generatedDataset.metadata.quality.numericFieldStats).length > 0 && (
+                <div className="mt-3 text-xs text-gray-700">
+                  <p className="font-medium">Numeric field stats:</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                    {Object.entries(generatedDataset.metadata.quality.numericFieldStats).slice(0, 2).map(([k, v]) => {
+                      const stat = v as { min: number; max: number; mean: number };
+                      return (
+                        <div key={k} className="p-2 bg-white rounded-lg border">
+                          <span className="font-semibold">{k}</span>
+                          <span className="ml-2">mean {stat.mean.toFixed(2)}, min {stat.min}, max {stat.max}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="bg-gray-900 rounded-xl p-4 mb-4">
             <pre className="text-green-400 text-xs overflow-x-auto">
               {JSON.stringify(generatedDataset.data.slice(0, 3), null, 2)}
@@ -376,6 +537,27 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
           </div>
 
           <div className="flex justify-end space-x-3">
+            <button
+              onClick={handleDownloadCSV}
+              className="btn-secondary"
+            >
+              <Icon icon="ph:file-csv" className="w-5 h-5 mr-2" />
+              Download CSV
+            </button>
+            <button
+              onClick={handleDownloadNDJSON}
+              className="btn-secondary"
+            >
+              <Icon icon="ph:brackets-curly" className="w-5 h-5 mr-2" />
+              Download NDJSON
+            </button>
+            <button
+              onClick={handleDownloadHFDataset}
+              className="btn-secondary"
+            >
+              <Icon icon="ph:brain" className="w-5 h-5 mr-2" />
+              HuggingFace JSON
+            </button>
             <button
               onClick={handleDownloadDataset}
               className="btn-secondary"

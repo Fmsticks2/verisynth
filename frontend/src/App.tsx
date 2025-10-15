@@ -6,9 +6,12 @@ import GeneratePanel from './components/GeneratePanel';
 import VerifyPanel from './components/VerifyPanel';
 import DatasetHistory from './components/DatasetHistory';
 import DatasetCard from './components/DatasetCard';
+import Marketplace from './components/Marketplace';
+import Analytics from './components/Analytics';
+import Governance from './components/Governance';
 import { Dataset, GeneratedDataset } from './types';
 
-type ActiveTab = 'generate' | 'verify' | 'history' | 'docs';
+type ActiveTab = 'generate' | 'verify' | 'history' | 'marketplace' | 'analytics' | 'governance' | 'docs';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('generate');
@@ -98,6 +101,12 @@ const App: React.FC = () => {
       
       case 'history':
         return <DatasetHistory />;
+      case 'marketplace':
+        return <Marketplace />;
+      case 'analytics':
+        return <Analytics datasets={datasets} lastGenerated={lastGenerated} />;
+      case 'governance':
+        return <Governance />;
       
       case 'docs':
         return (
@@ -252,6 +261,30 @@ const App: React.FC = () => {
                       <li>• Integration with major AI/ML frameworks</li>
                       <li>• Enterprise-grade analytics dashboard</li>
                       <li>• Decentralized governance mechanisms</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Implementation Status</h3>
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">🚀 Phase 1: Enhanced AI Integration</h4>
+                    <ul className="space-y-1 text-gray-600 text-sm ml-4">
+                      <li>• 0G entropy integration for distinct, on-chain randomized datasets</li>
+                      <li>• Advanced generation toggle for entropy-driven shuffling and mutation</li>
+                      <li>• Real-time data quality metrics and UI visualization</li>
+                      <li>• Export to CSV, NDJSON, HuggingFace-compatible JSON</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">🌐 Phase 3: Ecosystem Expansion</h4>
+                    <ul className="space-y-1 text-gray-600 text-sm ml-4">
+                      <li>• Marketplace tab with on-chain catalog scaffold</li>
+                      <li>• Analytics dashboard with session metrics</li>
+                      <li>• Governance UI placeholders for proposals and voting</li>
+                      <li>• Framework integration via export formats</li>
                     </ul>
                   </div>
                 </div>
