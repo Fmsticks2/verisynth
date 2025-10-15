@@ -82,6 +82,52 @@ exports.handler = async (event) => {
 
     const text = await resp.text();
     if (!resp.ok) {
+      // Auto-retry with empty keyvalues if Pinata complains about metadata limit
+      const isMetaLimitError = /maximum of 10 key values/i.test(text);
+      if (isMetaLimitError) {
+        const retryPayload = {
+          ...pinPayload,
+          pinataMetadata: {
+            ...pinPayload.pinataMetadata,
+            keyvalues: {},
+          },
+        };
+
+        const retryResp = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(retryPayload),
+        });
+        const retryText = await retryResp.text();
+        if (!retryResp.ok) {
+          return {
+            statusCode: retryResp.status,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: `Pinata upload failed after retry: ${retryText}` }),
+          };
+        }
+
+        let retryJson;
+        try {
+          retryJson = JSON.parse(retryText);
+        } catch (e) {
+          return {
+            statusCode: 502,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Invalid response from Pinata on retry' }),
+          };
+        }
+        const retryCid = retryJson.IpfsHash || retryJson.cid || retryJson.hash;
+        const retrySize = retryJson.PinSize || 0;
+        const gateway = process.env.PINATA_GATEWAY_URL || 'gateway.pinata.cloud';
+        const retryUrl = `https://${gateway}/ipfs/${retryCid}`;
+        return {
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cid: retryCid, url: retryUrl, size: retrySize, id: retryJson.id || undefined, groupId, metaTrimmed: true }),
+        };
+      }
+
       return {
         statusCode: resp.status,
         headers: { 'Content-Type': 'application/json' },
