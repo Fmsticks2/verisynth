@@ -139,10 +139,10 @@ export async function deleteGroup(groupId: string): Promise<void> {
 /**
  * Add files to a group
  * @param groupId - The ID of the group
- * @param cids - Array of CIDs to add to the group
+ * @param fileIds - Array of Pinata file IDs to add to the group
  * @returns Promise that resolves when files are added
  */
-export async function addFilesToGroup(groupId: string, cids: string[]): Promise<void> {
+export async function addFilesToGroup(groupId: string, fileIds: string[]): Promise<void> {
   try {
     if (!import.meta.env.VITE_PINATA_JWT || import.meta.env.VITE_PINATA_JWT === 'your_pinata_jwt_token_here') {
       throw new Error('Pinata JWT token not configured. Please set VITE_PINATA_JWT in your .env file.');
@@ -150,7 +150,7 @@ export async function addFilesToGroup(groupId: string, cids: string[]): Promise<
 
     await pinata.groups.public.addFiles({
       groupId: groupId,
-      files: cids
+      files: fileIds
     });
   } catch (error) {
     console.error('Failed to add files to group:', error);
@@ -161,10 +161,10 @@ export async function addFilesToGroup(groupId: string, cids: string[]): Promise<
 /**
  * Remove files from a group
  * @param groupId - The ID of the group
- * @param cids - Array of CIDs to remove from the group
+ * @param fileIds - Array of Pinata file IDs to remove from the group
  * @returns Promise that resolves when files are removed
  */
-export async function removeFilesFromGroup(groupId: string, cids: string[]): Promise<void> {
+export async function removeFilesFromGroup(groupId: string, fileIds: string[]): Promise<void> {
   try {
     if (!import.meta.env.VITE_PINATA_JWT || import.meta.env.VITE_PINATA_JWT === 'your_pinata_jwt_token_here') {
       throw new Error('Pinata JWT token not configured. Please set VITE_PINATA_JWT in your .env file.');
@@ -172,7 +172,7 @@ export async function removeFilesFromGroup(groupId: string, cids: string[]): Pro
 
     await pinata.groups.public.removeFiles({
       groupId: groupId,
-      files: cids
+      files: fileIds
     });
   } catch (error) {
     console.error('Failed to remove files from group:', error);

@@ -71,50 +71,26 @@ export async function verifyCIDExists(cid: string): Promise<VerificationResult> 
     // Record the API call for rate limiting
     pinataRateLimiter.recordCall();
 
-    // Check if the file exists on Pinata
-    try {
-      const fileInfo = await pinata.files.public.list();
+    // Prefer gateway HEAD verification using SDK URL conversion to minimize API usage
+    const url = await pinata.gateways.public.convert(cid);
+    const response = await fetch(url, { method: 'HEAD' });
 
-      if (fileInfo.files && fileInfo.files.length > 0) {
-        const file = fileInfo.files[0];
-        return {
-          isValid: true,
-          cid,
-          exists: true,
-          size: file.size
-        };
-      } else {
-        return {
-          isValid: true,
-          cid,
-          exists: false,
-          error: 'File not found on Pinata'
-        };
-      }
-    } catch (pinataError) {
-      // If Pinata check fails, try to access via gateway
-      const gatewayUrl = import.meta.env.VITE_PINATA_GATEWAY_URL || 'gateway.pinata.cloud';
-      const response = await fetch(`https://${gatewayUrl}/ipfs/${cid}`, {
-        method: 'HEAD'
-      });
-
-      if (response.ok) {
-        return {
-          isValid: true,
-          cid,
-          exists: true,
-          size: response.headers.get('content-length') ? 
-            parseInt(response.headers.get('content-length')!) : undefined
-        };
-      } else {
-        return {
-          isValid: true,
-          cid,
-          exists: false,
-          error: 'File not accessible via gateway'
-        };
-      }
+    if (response.ok) {
+      return {
+        isValid: true,
+        cid,
+        exists: true,
+        size: response.headers.get('content-length') ?
+          parseInt(response.headers.get('content-length')!) : undefined
+      };
     }
+
+    return {
+      isValid: true,
+      cid,
+      exists: false,
+      error: 'File not accessible via gateway'
+    };
   } catch (error) {
     return {
       isValid: false,

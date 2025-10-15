@@ -53,12 +53,8 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
     hash: data?.hash,
   });
 
-  // Effect to trigger contract write when CID is available
-  React.useEffect(() => {
-    if (uploadedCID && generatedDataset && write && !isTransactionLoading) {
-      write();
-    }
-  }, [uploadedCID, generatedDataset, write, isTransactionLoading]);
+  // Track if we've already initiated the transaction
+  const [hasInitiatedTransaction, setHasInitiatedTransaction] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -137,7 +133,7 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
   };
 
   const handleUploadAndRegister = async () => {
-    if (!generatedDataset || !isConnected) return;
+    if (!generatedDataset || !isConnected || hasInitiatedTransaction) return;
 
     setIsUploading(true);
     
@@ -146,7 +142,11 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
       const cid = await mockIPFSUpload(generatedDataset);
       setUploadedCID(cid);
       
-      // The contract write will be triggered by the useEffect when CID is set
+      // Trigger the contract write only once
+      if (write && !hasInitiatedTransaction) {
+        setHasInitiatedTransaction(true);
+        write();
+      }
       
     } catch (error) {
       setModalContent({
@@ -190,6 +190,7 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
       setTimeout(() => {
         setGeneratedDataset(null);
         setUploadedCID('');
+        setHasInitiatedTransaction(false); // Reset transaction flag
         setFormData({
           modelVersion: 'v1.0.0',
           seed: '',

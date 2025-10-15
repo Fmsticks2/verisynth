@@ -1,5 +1,5 @@
 import { PinataSDK } from 'pinata';
-import { createSignedUploadUrl } from '../api/pinata';
+// Using direct JWT uploads; signed URL preflight removed to reduce API usage
 import { verifyFileIntegrity } from './ipfsVerification';
 import { 
   validatePinataConfig, 
@@ -17,6 +17,7 @@ const pinata = new PinataSDK({
 
 export interface UploadResult {
   cid: string;
+  id?: string;
   url: string;
   size: number;
   verified?: boolean;
@@ -104,15 +105,7 @@ export async function uploadToIPFS(data: any, options: UploadOptions = {}): Prom
       uploadOptions.keyvalues = secureMetadata;
     }
 
-    // Get signed upload URL with appropriate file size limit and metadata
-    const maxFileSize = 10 * 1024 * 1024; // 10MB limit
-    await createSignedUploadUrl({
-      expires: 3600,
-      mimeTypes: [file.type, 'application/json', '*/*'],
-      maxFileSize,
-      groupId: uploadOptions.groupId,
-      keyvalues: uploadOptions.keyvalues,
-    });
+    // Removed signed URL preflight to avoid unnecessary API calls when using JWT uploads
     
     // Upload the file using Pinata SDK
     const uploadResult = await pinata.upload.public.file(file, {
@@ -142,6 +135,7 @@ export async function uploadToIPFS(data: any, options: UploadOptions = {}): Prom
 
     return {
       cid,
+      id: (uploadResult as any).id,
       url,
       size: uploadResult.size || 0,
       verified,
