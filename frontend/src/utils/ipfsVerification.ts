@@ -2,10 +2,20 @@ import * as isIPFS from 'is-ipfs';
 import { PinataSDK } from 'pinata';
 import { validatePinataConfig, pinataRateLimiter } from './pinataConfig';
 
+function normalizeGatewayHost(raw?: string): string {
+  let s = (raw || 'gateway.pinata.cloud').trim();
+  const dblSlashIdx = s.indexOf('//');
+  if (dblSlashIdx !== -1) s = s.slice(dblSlashIdx + 2);
+  s = s.replace(/^\/+/, '').replace(/\/+$/, '');
+  // strip any path after host
+  if (s.includes('/')) s = s.split('/')[0];
+  return s || 'gateway.pinata.cloud';
+}
+
 // Initialize Pinata client for verification operations
 const pinata = new PinataSDK({
   pinataJwt: import.meta.env.VITE_PINATA_JWT,
-  pinataGateway: import.meta.env.VITE_PINATA_GATEWAY_URL || 'gateway.pinata.cloud',
+  pinataGateway: normalizeGatewayHost(import.meta.env.VITE_PINATA_GATEWAY_URL),
 });
 
 export interface VerificationResult {
@@ -151,8 +161,8 @@ export async function retrieveFileContent(cid: string): Promise<string> {
     throw new Error('Invalid CID format');
   }
 
-  const gatewayUrl = import.meta.env.VITE_PINATA_GATEWAY_URL || 'gateway.pinata.cloud';
-  const response = await fetch(`https://${gatewayUrl}/ipfs/${cid}`);
+  const gatewayHost = normalizeGatewayHost(import.meta.env.VITE_PINATA_GATEWAY_URL);
+  const response = await fetch(`https://${gatewayHost}/ipfs/${cid}`);
 
   if (!response.ok) {
     throw new Error(`Failed to retrieve file: ${response.status} ${response.statusText}`);

@@ -159,6 +159,14 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
     }
   };
 
+  // Trigger contract write when CID becomes available and config is ready
+  React.useEffect(() => {
+    if (generatedDataset && uploadedCID && isConnected && write && !hasInitiatedTransaction) {
+      setHasInitiatedTransaction(true);
+      write();
+    }
+  }, [generatedDataset, uploadedCID, isConnected, write, hasInitiatedTransaction]);
+
   // Handle transaction success
   React.useEffect(() => {
     if (isSuccess && data?.hash) {

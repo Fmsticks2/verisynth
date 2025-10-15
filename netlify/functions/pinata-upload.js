@@ -119,8 +119,16 @@ exports.handler = async (event) => {
         }
         const retryCid = retryJson.IpfsHash || retryJson.cid || retryJson.hash;
         const retrySize = retryJson.PinSize || 0;
-        const gateway = process.env.PINATA_GATEWAY_URL || 'gateway.pinata.cloud';
-        const retryUrl = `https://${gateway}/ipfs/${retryCid}`;
+        const normalizeGatewayHost = (raw) => {
+          let s = (raw || 'gateway.pinata.cloud').trim();
+          const dbl = s.indexOf('//');
+          if (dbl !== -1) s = s.slice(dbl + 2);
+          s = s.replace(/^\/+/, '').replace(/\/+$/, '');
+          if (s.includes('/')) s = s.split('/')[0];
+          return s || 'gateway.pinata.cloud';
+        };
+        const retryGatewayHost = normalizeGatewayHost(process.env.PINATA_GATEWAY_URL);
+        const retryUrl = `https://${retryGatewayHost}/ipfs/${retryCid}`;
         return {
           statusCode: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -149,8 +157,16 @@ exports.handler = async (event) => {
     const cid = json.IpfsHash || json.cid || json.hash;
     const pinSize = json.PinSize || 0;
 
-    const gateway = process.env.PINATA_GATEWAY_URL || 'gateway.pinata.cloud';
-    const url = `https://${gateway}/ipfs/${cid}`;
+    const normalizeGatewayHost = (raw) => {
+      let s = (raw || 'gateway.pinata.cloud').trim();
+      const dbl = s.indexOf('//');
+      if (dbl !== -1) s = s.slice(dbl + 2);
+      s = s.replace(/^\/+/, '').replace(/\/+$/, '');
+      if (s.includes('/')) s = s.split('/')[0];
+      return s || 'gateway.pinata.cloud';
+    };
+    const gatewayHost = normalizeGatewayHost(process.env.PINATA_GATEWAY_URL);
+    const url = `https://${gatewayHost}/ipfs/${cid}`;
 
     return {
       statusCode: 200,
