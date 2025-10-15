@@ -73,25 +73,21 @@ export function getPinataConfig(): PinataConfig {
 export function validatePinataConfig(): void {
   const config = getPinataConfig();
   
+  // Client-side now uses server-side Netlify function for uploads,
+  // so JWT presence is optional here. Log warnings instead of throwing.
   if (!config.jwt) {
-    throw new Error(
-      'CONFIGURATION_ERROR: VITE_PINATA_JWT environment variable is not set. ' +
-      'Please add your Pinata JWT token to your .env file.'
-    );
+    console.warn('Pinata JWT not set in client env; using server-side upload proxy.');
+    return;
   }
 
   if (!isValidJWT(config.jwt)) {
-    throw new Error(
-      'CONFIGURATION_ERROR: VITE_PINATA_JWT appears to be invalid. ' +
-      'Please check that you have copied the complete JWT token from your Pinata dashboard.'
-    );
+    console.warn('Pinata JWT appears invalid in client env; using server-side upload proxy.');
+    return;
   }
 
   if (config.jwt === 'your_pinata_jwt_token_here') {
-    throw new Error(
-      'CONFIGURATION_ERROR: VITE_PINATA_JWT is still set to the placeholder value. ' +
-      'Please replace it with your actual Pinata JWT token.'
-    );
+    console.warn('Pinata JWT placeholder detected; using server-side upload proxy.');
+    return;
   }
 }
 
