@@ -35,7 +35,11 @@ export async function handleCreateSignedUrl(
       };
     }
 
-    const result = await createSignedUploadUrl(expires, mimeTypes, maxFileSize);
+    const result = await createSignedUploadUrl({
+      expires,
+      mimeTypes,
+      maxFileSize,
+    });
 
     return {
       success: true,
@@ -60,7 +64,11 @@ export async function getSignedUploadUrl(
   maxFileSize?: number
 ): Promise<string> {
   try {
-    const result = await createSignedUploadUrl(expires, mimeTypes, maxFileSize);
+    const result = await createSignedUploadUrl({
+      expires,
+      mimeTypes,
+      maxFileSize,
+    });
     return result.url;
   } catch (error) {
     console.error('Failed to get signed upload URL:', error);

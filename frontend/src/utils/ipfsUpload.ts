@@ -1,5 +1,13 @@
 import { PinataSDK } from 'pinata';
-import { getSignedUploadUrl } from '../api/upload';
+import { createSignedUploadUrl } from '../api/pinata';
+import { verifyFileIntegrity } from './ipfsVerification';
+import { 
+  validatePinataConfig, 
+  sanitizeFilename, 
+  isValidFileSize, 
+  generateSecureMetadata,
+  pinataRateLimiter 
+} from './pinataConfig';
 
 // Initialize Pinata client
 const pinata = new PinataSDK({
@@ -11,60 +19,160 @@ export interface UploadResult {
   cid: string;
   url: string;
   size: number;
+  verified?: boolean;
+  metadata?: UploadMetadata;
+}
+
+export interface UploadMetadata {
+  name?: string;
+  keyvalues?: Record<string, string | number>;
+  groupId?: string;
+}
+
+export interface UploadOptions {
+  filename?: string;
+  metadata?: UploadMetadata;
+  verify?: boolean;
 }
 
 /**
- * Upload data to IPFS using Pinata with signed URLs to avoid CORS issues
+ * Upload data to IPFS using Pinata with signed URLs, metadata support, and optional verification
  * @param data - The data to upload (can be JSON object, string, or File)
- * @param filename - Optional filename for the upload
- * @returns Promise with upload result containing CID and URL
+ * @param options - Upload options including filename, metadata, and verification
+ * @returns Promise with upload result containing CID, URL, and verification status
  */
-export async function uploadToIPFS(data: any, filename?: string): Promise<UploadResult> {
+export async function uploadToIPFS(data: any, options: UploadOptions = {}): Promise<UploadResult> {
   try {
-    // Check if Pinata JWT is configured
-    if (!import.meta.env.VITE_PINATA_JWT || import.meta.env.VITE_PINATA_JWT === 'your_pinata_jwt_token_here') {
-      throw new Error('Pinata JWT token not configured. Please set VITE_PINATA_JWT in your .env file.');
+    // Validate configuration first
+    validatePinataConfig();
+
+    // Check rate limiting
+    if (!pinataRateLimiter.canMakeCall()) {
+      const waitTime = pinataRateLimiter.getTimeUntilNextCall();
+      throw new Error(`RATE_LIMIT_ERROR: Too many requests. Please wait ${Math.ceil(waitTime / 1000)} seconds before trying again.`);
     }
 
     let file: File;
+    let filename = options.filename || 'dataset.json';
     
     if (data instanceof File) {
       // Use file directly
       file = data;
+      filename = sanitizeFilename(file.name);
     } else {
       // Convert data to JSON and create file
       const jsonString = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json' });
-      file = new File([blob], filename || 'dataset.json', { type: 'application/json' });
+      filename = sanitizeFilename(filename);
+      file = new File([blob], filename, { type: 'application/json' });
     }
 
-    // Get signed upload URL with appropriate file size limit
-    const maxFileSize = 10 * 1024 * 1024; // 10MB limit
-    const signedUrl = await getSignedUploadUrl(3600, [file.type, 'application/json', '*/*'], maxFileSize);
+    // Validate file size
+    if (!isValidFileSize(file.size)) {
+      throw new Error(`FILE_SIZE_ERROR: File size (${file.size} bytes) exceeds the maximum allowed size.`);
+    }
+
+    // Record the API call for rate limiting
+    pinataRateLimiter.recordCall();
+
+    // Prepare upload options with secure metadata
+    const secureMetadata = generateSecureMetadata({
+      originalFilename: options.filename,
+      fileType: file.type,
+      fileSize: file.size,
+    });
+
+    const uploadOptions: any = {};
     
-    // Upload using signed URL
-    const uploadResult = await pinata.upload.public.file(file).url(signedUrl);
+    if (options.metadata) {
+      if (options.metadata.name) {
+        uploadOptions.name = sanitizeFilename(options.metadata.name);
+      }
+      if (options.metadata.keyvalues) {
+        // Merge with secure metadata
+        uploadOptions.keyvalues = {
+          ...secureMetadata,
+          ...options.metadata.keyvalues,
+        };
+      } else {
+        uploadOptions.keyvalues = secureMetadata;
+      }
+      if (options.metadata.groupId) {
+        uploadOptions.groupId = options.metadata.groupId;
+      }
+    } else {
+      uploadOptions.keyvalues = secureMetadata;
+    }
+
+    // Get signed upload URL with appropriate file size limit and metadata
+    const maxFileSize = 10 * 1024 * 1024; // 10MB limit
+    await createSignedUploadUrl({
+      expires: 3600,
+      mimeTypes: [file.type, 'application/json', '*/*'],
+      maxFileSize,
+      groupId: uploadOptions.groupId,
+      keyvalues: uploadOptions.keyvalues,
+    });
+    
+    // Upload the file using Pinata SDK
+    const uploadResult = await pinata.upload.public.file(file, {
+      metadata: {
+        name: options?.metadata?.name || file.name,
+        keyvalues: uploadOptions.keyvalues
+      },
+      groupId: uploadOptions.groupId
+    });
 
     const cid = uploadResult.cid;
     const gatewayUrl = import.meta.env.VITE_PINATA_GATEWAY_URL || 'gateway.pinata.cloud';
     const url = `https://${gatewayUrl}/ipfs/${cid}`;
 
+    let verified = false;
+    
+    // Optional verification step
+    if (options.verify) {
+      try {
+        const verificationResult = await verifyFileIntegrity(cid);
+        verified = verificationResult.isValid && verificationResult.matches;
+      } catch (verifyError) {
+        console.warn('File verification failed:', verifyError);
+        // Don't fail the upload if verification fails
+      }
+    }
+
     return {
       cid,
       url,
       size: uploadResult.size || 0,
+      verified,
+      metadata: options.metadata,
     };
   } catch (error) {
     console.error('IPFS upload failed:', error);
     
-    // Check if it's a signed URL creation error
-    if (error instanceof Error && error.message.includes('signed upload URL')) {
-      throw new Error('SIGNED_URL_ERROR: Failed to create signed upload URL. This may be due to API configuration issues.');
-    }
-    
-    // Check if it's a CORS or network error (less likely with signed URLs)
-    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-      throw new Error('NETWORK_ERROR: Upload failed due to network issues. Please try again.');
+    // Enhanced error handling with specific error types
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+      
+      if (errorMessage.includes('CONFIGURATION_ERROR')) {
+        throw error; // Re-throw configuration errors as-is
+      }
+      
+      if (errorMessage.includes('RATE_LIMIT_ERROR')) {
+        throw error; // Re-throw rate limit errors as-is
+      }
+      
+      if (errorMessage.includes('FILE_SIZE_ERROR')) {
+        throw error; // Re-throw file size errors as-is
+      }
+      
+      if (errorMessage.includes('signed upload URL')) {
+        throw new Error('SIGNED_URL_ERROR: Failed to create signed upload URL. This may be due to API configuration issues.');
+      }
+      
+      if (error instanceof TypeError && errorMessage.includes('Failed to fetch')) {
+        throw new Error('NETWORK_ERROR: Upload failed due to network issues. Please try again.');
+      }
     }
     
     throw new Error(`Failed to upload to IPFS: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -74,10 +182,11 @@ export async function uploadToIPFS(data: any, filename?: string): Promise<Upload
 /**
  * Upload dataset with metadata to IPFS
  * @param dataset - The generated dataset object
+ * @param options - Additional upload options
  * @returns Promise with upload result
  */
-export async function uploadDatasetToIPFS(dataset: any): Promise<UploadResult> {
-  const filename = `dataset-${dataset.hash.slice(0, 8)}-${Date.now()}.json`;
+export async function uploadDatasetToIPFS(dataset: any, options: UploadOptions = {}): Promise<UploadResult> {
+  const filename = options.filename || `dataset-${dataset.hash.slice(0, 8)}-${Date.now()}.json`;
   
   // Create a comprehensive dataset object for upload
   const uploadData = {
@@ -94,7 +203,26 @@ export async function uploadDatasetToIPFS(dataset: any): Promise<UploadResult> {
     },
   };
 
-  return uploadToIPFS(uploadData, filename);
+  // Enhanced metadata with dataset-specific keyvalues
+  const enhancedMetadata: UploadMetadata = {
+    name: options.metadata?.name || `Dataset ${dataset.hash.slice(0, 8)}`,
+    keyvalues: {
+      type: 'dataset',
+      version: '1.0.0',
+      recordCount: dataset.data.length,
+      dataSize: JSON.stringify(dataset.data).length,
+      uploadedAt: new Date().toISOString(),
+      ...options.metadata?.keyvalues,
+    },
+    groupId: options.metadata?.groupId,
+  };
+
+  return uploadToIPFS(uploadData, {
+    ...options,
+    filename,
+    metadata: enhancedMetadata,
+    verify: options.verify !== false, // Default to true for datasets
+  });
 }
 
 /**
@@ -120,10 +248,10 @@ export function simulateIPFSUpload(data: any): Promise<UploadResult> {
 /**
  * Smart upload function that uses signed URLs for real IPFS uploads, with fallback to simulation
  */
-export async function smartUploadToIPFS(data: any, filename?: string): Promise<UploadResult> {
+export async function smartUploadToIPFS(data: any, options: UploadOptions = {}): Promise<UploadResult> {
   try {
     // Try real upload with signed URLs first
-    return await uploadToIPFS(data, filename);
+    return await uploadToIPFS(data, options);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     

@@ -11,15 +11,19 @@ export interface SignedUrlResponse {
   expires: number;
 }
 
+export interface SignedUrlOptions {
+  expires?: number;
+  mimeTypes?: string[];
+  maxFileSize?: number;
+  groupId?: string;
+  keyvalues?: Record<string, string | number>;
+}
+
 /**
  * Create a signed upload URL for Pinata directly in the frontend
  * Uses the public method which is safe for client-side usage
  */
-export async function createSignedUploadUrl(
-  expires: number = 3600, // 1 hour default
-  mimeTypes?: string[],
-  maxFileSize?: number
-): Promise<SignedUrlResponse> {
+export async function createSignedUploadUrl(options: SignedUrlOptions = {}): Promise<SignedUrlResponse> {
   try {
     // Check if Pinata JWT is configured
     const jwt = import.meta.env.VITE_PINATA_JWT;
@@ -27,15 +31,26 @@ export async function createSignedUploadUrl(
       throw new Error('Pinata JWT token not configured. Please set VITE_PINATA_JWT environment variable.');
     }
 
-    const signedUrl = await pinata.upload.public.createSignedURL({
-      expires,
-      mimeTypes: mimeTypes || ['application/json', 'text/plain', 'image/*', '*/*'],
-      maxFileSize: maxFileSize || 10 * 1024 * 1024 // 10MB default
-    });
+    const signedUrlOptions: any = {
+      expires: options.expires || 3600, // 1 hour default
+      mimeTypes: options.mimeTypes || ['application/json', 'text/plain', 'image/*', '*/*'],
+      maxFileSize: options.maxFileSize || 10 * 1024 * 1024, // 10MB default
+    };
+
+    // Add optional parameters if provided
+    if (options.groupId) {
+      signedUrlOptions.groupId = options.groupId;
+    }
+    
+    if (options.keyvalues) {
+      signedUrlOptions.keyvalues = options.keyvalues;
+    }
+
+    const signedUrl = await pinata.upload.public.createSignedURL(signedUrlOptions);
 
     return {
       url: signedUrl,
-      expires
+      expires: signedUrlOptions.expires
     };
   } catch (error) {
     console.error('Failed to create signed upload URL:', error);
