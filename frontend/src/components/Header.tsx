@@ -19,11 +19,11 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
       className="bg-white shadow-lg border-b border-gray-100"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="grid grid-cols-3 items-center h-16">
           {/* Logo and Brand */}
           <motion.div
             whileHover={{ scale: 1.05 }}
-            className="flex items-center space-x-3"
+            className="flex items-center space-x-3 justify-self-start"
           >
             <div className="bg-gradient-to-r from-primary-600 to-purple-600 p-2 rounded-xl">
               <Icon
@@ -41,8 +41,8 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
             </div>
           </motion.div>
 
-          {/* Navigation */}
-          <nav className="hidden md:flex items-center space-x-8">
+          {/* Navigation (center) */}
+          <nav className="hidden md:flex items-center justify-center space-x-4 justify-self-center overflow-x-auto">
             {[
               { id: 'generate' as const, label: 'Generate', icon: 'ph:plus-circle-bold' },
               { id: 'verify' as const, label: 'Verify', icon: 'ph:shield-check-bold' },
@@ -55,7 +55,7 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 ${
                   activeTab === item.id
                     ? 'bg-primary-100 text-primary-700 font-medium'
                     : 'text-gray-600 hover:text-primary-600 hover:bg-gray-100'
@@ -67,8 +67,8 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
             ))}
           </nav>
 
-          {/* Wallet Connection */}
-          <div className="flex items-center space-x-4">
+          {/* Wallet Connection (right) */}
+          <div className="flex items-center space-x-4 justify-self-end">
             <ConnectButton
               chainStatus="icon"
               accountStatus={{
