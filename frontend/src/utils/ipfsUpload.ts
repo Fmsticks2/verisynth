@@ -1,5 +1,3 @@
-import { PinataSDK } from 'pinata';
-// Using direct JWT uploads; signed URL preflight removed to reduce API usage
 import { verifyFileIntegrity } from './ipfsVerification';
 import { 
   validatePinataConfig, 
@@ -9,11 +7,7 @@ import {
   pinataRateLimiter 
 } from './pinataConfig';
 
-// Initialize Pinata client
-const pinata = new PinataSDK({
-  pinataJwt: import.meta.env.VITE_PINATA_JWT,
-  pinataGateway: import.meta.env.VITE_PINATA_GATEWAY_URL || 'gateway.pinata.cloud',
-});
+// Note: All Pinata network calls are proxied through Netlify Function to avoid CORS
 
 export interface UploadResult {
   cid: string;
@@ -44,7 +38,7 @@ export interface UploadOptions {
  */
 export async function uploadToIPFS(data: any, options: UploadOptions = {}): Promise<UploadResult> {
   try {
-    // Validate configuration first
+    // Validate configuration first (still used for optional values and limits)
     validatePinataConfig();
 
     // Check rate limiting
@@ -53,24 +47,31 @@ export async function uploadToIPFS(data: any, options: UploadOptions = {}): Prom
       throw new Error(`RATE_LIMIT_ERROR: Too many requests. Please wait ${Math.ceil(waitTime / 1000)} seconds before trying again.`);
     }
 
-    let file: File;
+    let payload: any;
     let filename = options.filename || 'dataset.json';
-    
+
     if (data instanceof File) {
-      // Use file directly
-      file = data;
-      filename = sanitizeFilename(file.name);
-    } else {
-      // Convert data to JSON and create file
-      const jsonString = JSON.stringify(data, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/json' });
+      // Only JSON files are supported via server proxy
+      if (!data.type.includes('json')) {
+        throw new Error('UPLOAD_TYPE_ERROR: Only JSON uploads are supported via server proxy.');
+      }
+      const text = await data.text();
+      payload = JSON.parse(text);
+      filename = sanitizeFilename(data.name);
+    } else if (typeof data === 'string') {
+      // If a JSON string is provided
+      payload = JSON.parse(data);
       filename = sanitizeFilename(filename);
-      file = new File([blob], filename, { type: 'application/json' });
+    } else {
+      // Assume object
+      payload = data;
+      filename = sanitizeFilename(filename);
     }
 
-    // Validate file size
-    if (!isValidFileSize(file.size)) {
-      throw new Error(`FILE_SIZE_ERROR: File size (${file.size} bytes) exceeds the maximum allowed size.`);
+    // Validate payload size approximately (stringify length)
+    const approxSize = JSON.stringify(payload).length;
+    if (!isValidFileSize(approxSize)) {
+      throw new Error(`FILE_SIZE_ERROR: File size (${approxSize} bytes) exceeds the maximum allowed size.`);
     }
 
     // Record the API call for rate limiting
@@ -78,9 +79,9 @@ export async function uploadToIPFS(data: any, options: UploadOptions = {}): Prom
 
     // Prepare upload options with secure metadata
     const secureMetadata = generateSecureMetadata({
-      originalFilename: options.filename,
-      fileType: file.type,
-      fileSize: file.size,
+      originalFilename: filename,
+      fileType: 'application/json',
+      fileSize: approxSize,
     });
 
     const uploadOptions: any = {};
@@ -105,20 +106,29 @@ export async function uploadToIPFS(data: any, options: UploadOptions = {}): Prom
       uploadOptions.keyvalues = secureMetadata;
     }
 
-    // Removed signed URL preflight to avoid unnecessary API calls when using JWT uploads
-    
-    // Upload the file using Pinata SDK
-    const uploadResult = await pinata.upload.public.file(file, {
-      metadata: {
-        name: options?.metadata?.name || file.name,
-        keyvalues: uploadOptions.keyvalues
-      },
-      groupId: uploadOptions.groupId
+    // Upload via Netlify Function to avoid CORS and protect JWT
+    const resp = await fetch('/.netlify/functions/pinata-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: payload,
+        filename,
+        metadata: {
+          name: options?.metadata?.name || filename,
+          keyvalues: uploadOptions.keyvalues,
+        },
+        groupId: uploadOptions.groupId,
+      }),
     });
 
-    const cid = uploadResult.cid;
-    const gatewayUrl = import.meta.env.VITE_PINATA_GATEWAY_URL || 'gateway.pinata.cloud';
-    const url = `https://${gatewayUrl}/ipfs/${cid}`;
+    const text = await resp.text();
+    if (!resp.ok) {
+      throw new Error(`SERVER_UPLOAD_ERROR: ${resp.status} ${text}`);
+    }
+
+    const serverResult = JSON.parse(text);
+    const cid = serverResult.cid;
+    const url = serverResult.url;
 
     let verified = false;
     
@@ -135,9 +145,9 @@ export async function uploadToIPFS(data: any, options: UploadOptions = {}): Prom
 
     return {
       cid,
-      id: (uploadResult as any).id,
+      id: serverResult.id,
       url,
-      size: uploadResult.size || 0,
+      size: serverResult.size || approxSize,
       verified,
       metadata: options.metadata,
     };
