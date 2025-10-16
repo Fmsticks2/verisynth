@@ -35,7 +35,6 @@ const Governance: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const pid = params.get('proposalId');
     if (pid) setSelectedProposalId(parseInt(pid));
-    const preview = params.get('preview');
     // Smooth scroll to voting section if deep-linked
     setTimeout(() => {
       voteSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
