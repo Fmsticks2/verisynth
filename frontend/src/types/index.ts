@@ -36,6 +36,7 @@ export interface VerificationResult {
   onChainHash: string;
   computedHash: string;
   dataset?: Dataset;
+  uploadedCid?: string;
 }
 
 export interface QualityMetrics {

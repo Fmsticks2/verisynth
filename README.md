@@ -1,252 +1,210 @@
-# VeriSynth - Synthetic Data Verification Platform
+# VeriSynth — Synthetic Data Integrity and Marketplace
 
-VeriSynth is a blockchain-based platform for generating, registering, and verifying synthetic datasets. It combines deterministic data generation with cryptographic hashing and IPFS storage to ensure data integrity and provenance.
+VeriSynth is a platform for generating, registering, and verifying synthetic datasets with on-chain provenance and decentralized storage. It combines deterministic data generation, cryptographic hashing, and IPFS to ensure integrity, traceability, and repeatability.
 
-## 🌟 Features
+## Overview
 
-- **Deterministic Data Generation**: Generate reproducible synthetic datasets using seeded random number generation
-- **Blockchain Registry**: Register datasets on-chain with immutable metadata and ownership tracking
-- **Cryptographic Verification**: Verify dataset integrity using SHA-256 hashing
-- **IPFS Integration**: Decentralized storage simulation for dataset content
-- **Web3 Wallet Integration**: Connect with MetaMask and other Web3 wallets using RainbowKit
-- **Modern UI**: Beautiful, responsive interface built with React, TypeScript, and Tailwind CSS
+- Deterministic synthetic data generation with seeds and topic templates
+- On-chain registration of dataset metadata and content identifiers (CIDs)
+- Integrity verification via SHA-256 and CID existence checks
+- IPFS uploads via a secure serverless proxy (Netlify Function)
+- Wallet connection and transaction flow via RainbowKit and Wagmi
+- Modern frontend built with React, TypeScript, Tailwind, and Vite
 
-## 🏗️ Architecture
+## Architecture
 
-### Smart Contract
-- **DatasetRegistry.sol**: Manages dataset registration, verification, and ownership
-- Built with Solidity ^0.8.20 and OpenZeppelin contracts
-- Deployed on local Hardhat network for development
+### Smart Contracts
+- DatasetRegistry: Registers datasets with `modelVersion`, `seed`, `dataHash`, and `cid`; exposes querying and verification methods; emits `DatasetRegistered` and `DatasetVerified` events.
+- DatasetMarketplace: Lists datasets with pricing and license metadata; enables purchase flows and license tracking.
+- Governance: Simple proposal creation and voting for platform parameters and upgrades.
+
+Contracts are authored in Solidity (0.8.x) and prepared for deployment to the 0G Galileo Testnet, with local Hardhat and EVM testnets available for development.
 
 ### Frontend
-- **React + TypeScript**: Modern web application framework
-- **Wagmi + RainbowKit**: Web3 integration and wallet connection
-- **Tailwind CSS**: Utility-first CSS framework for styling
-- **Framer Motion**: Smooth animations and transitions
-- **Vite**: Fast development build tool
+- React + TypeScript with Vite for fast development and builds.
+- Wagmi + RainbowKit for wallet connection and chain switching; 0G testnet is the default chain (`chainId: 16602`).
+- Tailwind CSS for styling; light theme via RainbowKit.
+- Verification panel displays on-chain hash, computed hash, and uploaded IPFS CID with copy actions and gateway links.
 
-### Data Generation
-- **Seeded Random Generation**: Reproducible synthetic data creation
-- **Multiple Data Types**: Support for various synthetic data templates
-- **Hash-based Verification**: SHA-256 hashing for data integrity
+### IPFS and Serverless
+- Netlify Function (`netlify/functions/pinata-upload.js`) proxies `pinJSONToIPFS` to avoid CORS and protect credentials.
+- Client utilities handle JSON-only uploads, secure metadata generation, rate limiting, and optional post-upload verification.
+- Pinata SDK used from the client for read-only operations (CID validation, gateway conversions).
 
-## 🚀 Quick Start
+## Tech Stack
+
+- Smart contracts: Solidity, Hardhat, OpenZeppelin
+- Frontend: React, TypeScript, Vite, Tailwind, Framer Motion
+- Web3: Wagmi, RainbowKit, WalletConnect
+- Storage: IPFS via Pinata (serverless proxy)
+- DevOps: Netlify Functions, Netlify deploy, Node 18
+
+## Implemented Features
+
+- Deterministic dataset generator with topic templates and seed control
+- Hash-based integrity: SHA-256 over generated data
+- Dataset registration on-chain (DatasetRegistry)
+- Marketplace listing and purchase flow (DatasetMarketplace)
+- Governance proposals and voting (Governance)
+- IPFS upload (JSON) with CID returned and displayed in the UI
+- Verification panel with on-chain vs computed hash, CID copy buttons, and gateway links
+- Copy-to-clipboard for hashes and CIDs
+- Favicon and Open Graph meta tags for professional link previews
+
+## Quick Start
 
 ### Prerequisites
+- Node.js 18+
+- npm
+- A Web3 wallet (e.g., MetaMask)
 
-- Node.js (v16 or higher)
-- npm or yarn
-- MetaMask or compatible Web3 wallet
+### Install
+```bash
+git clone <repository-url>
+cd verisynth
+npm install
+cd frontend && npm install
+```
 
-### Installation
+### Development
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd verisynth
-   ```
+Run the frontend:
+```bash
+cd frontend
+npm run dev
+```
+The app runs at `http://localhost:3000` (or next available port). 0G Galileo Testnet is the default network.
 
-2. **Install dependencies**
-   ```bash
-   # Install root dependencies
-   npm install
-   
-   # Install contract dependencies
-   cd contracts
-   npm install
-   
-   # Install frontend dependencies
-   cd ../frontend
-   npm install
-   ```
+Optional: run Hardhat for local EVM testing:
+```bash
+cd contracts
+npx hardhat node
+```
 
-### Development Setup
+### Environment
 
-1. **Start the Hardhat local network**
-   ```bash
-   cd contracts
-   npx hardhat node
-   ```
-   This will start a local Ethereum network with 20 pre-funded accounts.
+Frontend (`frontend/.env`):
+```env
+# WalletConnect / RainbowKit
+VITE_WALLETCONNECT_PROJECT_ID=<your_walletconnect_project_id>
 
-2. **Deploy the smart contract**
-   ```bash
-   # In a new terminal, from the contracts directory
-   npx hardhat run scripts/deploy.js --network localhost
-   ```
-   The contract will be deployed and the address will be saved to the frontend configuration.
+# 0G Galileo Testnet
+VITE_OG_CHAIN_NAME=0G-Galileo-Testnet
+VITE_OG_RPC_URL=https://evmrpc-testnet.0g.ai
+VITE_OG_BLOCK_EXPLORER_URL=https://chainscan-galileo.0g.ai
+VITE_OG_NATIVE_CURRENCY_NAME=OG
+VITE_OG_NATIVE_CURRENCY_SYMBOL=OG
+VITE_OG_NATIVE_CURRENCY_DECIMALS=18
 
-3. **Start the frontend development server**
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-   The application will be available at `http://localhost:3000`
+# Pinata gateway used for reads
+VITE_PINATA_GATEWAY_URL=gateway.pinata.cloud
 
-4. **Configure MetaMask**
-   - Add the local Hardhat network to MetaMask:
-     - Network Name: Hardhat Local
-     - RPC URL: http://127.0.0.1:8545
-     - Chain ID: 31337
-     - Currency Symbol: ETH
-   - Import one of the test accounts using the private keys shown in the Hardhat node output
+# Optional: contract addresses for other networks
+VITE_DATASET_REGISTRY_ADDRESS_OG=<deployed_address_on_0g>
+VITE_DATASET_REGISTRY_ADDRESS_SEPOLIA=
+VITE_DATASET_REGISTRY_ADDRESS_MUMBAI=
+```
 
-## 📖 Usage Guide
+Netlify (server-side, set in dashboard):
+```text
+PINATA_JWT=<pinata_jwt>          # or PINATA_API_KEY and PINATA_SECRET_API_KEY
+PINATA_API_KEY=<optional>
+PINATA_SECRET_API_KEY=<optional>
+PINATA_GATEWAY_URL=gateway.pinata.cloud
+```
 
-### Generating Datasets
+### IPFS Upload Flow
 
-1. **Connect your wallet** using the "Connect Wallet" button in the header
-2. **Navigate to the Generate tab**
-3. **Fill in the dataset parameters**:
-   - Model Version: Version identifier for your data model
-   - Seed: Numeric seed for reproducible generation
-   - Topic: Subject matter for the synthetic data
-   - Record Count: Number of records to generate (1-1000)
-4. **Click "Generate Dataset"** to create and register the dataset
-5. **Confirm the transaction** in your wallet
-6. **View the generated dataset** in the results section
+- Client prepares JSON dataset and metadata.
+- Upload request posted to `/.netlify/functions/pinata-upload`.
+- Function calls Pinata `pinJSONToIPFS` and returns `{ cid, url, size }`.
+- UI displays CID with copy action and gateway link.
 
-### Verifying Datasets
+## Usage
 
-1. **Navigate to the Verify tab**
-2. **Enter the Dataset ID** you want to verify
-3. **Upload a JSON file** containing the dataset to verify
-4. **Click "Verify Dataset"** to check integrity
-5. **View the verification results** showing whether the data matches the registered hash
+- Generate: choose topic, seed, and record count; compute hash and preview.
+- Register: submit on-chain transaction to register dataset with hash and CID.
+- Verify: upload JSON and compare computed hash with on-chain hash; confirm CID existence.
+- Marketplace: list datasets with price and license CID; purchase from connected wallet.
+- Governance: create proposals and vote.
 
-### Viewing Documentation
+## Testing
 
-The **Docs tab** contains comprehensive information about:
-- How VeriSynth works
-- Technical implementation details
-- API reference
-- Best practices for synthetic data generation
-
-## 🧪 Testing
-
-### Smart Contract Tests
-
+Contracts:
 ```bash
 cd contracts
 npx hardhat test
 ```
 
-The test suite covers:
-- Contract deployment and initialization
-- Dataset registration functionality
-- Data verification processes
-- Owner-based dataset queries
-- Access control and permissions
+Frontend:
+- Manual flows across Generate, Register, Verify, Marketplace, and Governance
+- Optional: run `netlify dev` to test serverless function locally
 
-### Frontend Testing
-
-The frontend can be tested manually by:
-1. Connecting different wallet accounts
-2. Generating datasets with various parameters
-3. Verifying datasets with correct and incorrect data
-4. Testing the responsive UI across different screen sizes
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 verisynth/
-├── contracts/                 # Smart contract code
+├── contracts/
 │   ├── contracts/
-│   │   └── DatasetRegistry.sol
+│   │   ├── DatasetRegistry.sol
+│   │   ├── DatasetMarketplace.sol
+│   │   └── Governance.sol
 │   ├── scripts/
-│   │   └── deploy.js
 │   ├── test/
-│   │   └── DatasetRegistry.test.js
 │   └── hardhat.config.js
-├── frontend/                  # React frontend application
+├── frontend/
 │   ├── src/
-│   │   ├── components/        # React components
-│   │   ├── utils/            # Utility functions
-│   │   ├── types/            # TypeScript type definitions
-│   │   └── contracts/        # Contract ABI and addresses
-│   ├── public/               # Static assets
-│   └── package.json
+│   │   ├── components/
+│   │   │   ├── GeneratePanel.tsx
+│   │   │   ├── VerifyPanel.tsx
+│   │   │   ├── Marketplace.tsx
+│   │   │   └── Governance.tsx
+│   │   ├── utils/
+│   │   │   ├── ipfsUpload.ts
+│   │   │   ├── ipfsVerification.ts
+│   │   │   ├── pinataGroups.ts
+│   │   │   ├── contractConfig.ts
+│   │   │   └── dataGenerator.ts
+│   │   ├── wagmi.ts
+│   │   └── contracts/
+│   ├── public/
+│   └── index.html
+├── netlify/
+│   └── functions/
+│       └── pinata-upload.js
 └── README.md
 ```
 
-## 🔧 Configuration
+## Configuration Notes
 
-### Environment Variables
+- `frontend/src/wagmi.ts` sets 0G Galileo Testnet as the default chain (16602).
+- `frontend/src/utils/contractConfig.ts` reads addresses from `VITE_DATASET_REGISTRY_ADDRESS_*` envs.
+- IPFS uploads are JSON-only via the server proxy; provide a JSON object or a JSON file.
 
-Create a `.env` file in the frontend directory:
+## Security
 
-```env
-VITE_CHAIN_ID=31337
-VITE_RPC_URL=http://127.0.0.1:8545
-```
+- Never expose admin credentials in client env; use server-side envs in Netlify.
+- Validate file size and MIME type before uploads; JSON-only enforced client-side.
+- Rate limiting applied to client IPFS operations to prevent abuse.
+- On-chain ownership and event logs provide provenance.
 
-### Contract Configuration
+## Deployment
 
-The contract address and ABI are automatically updated in `frontend/src/utils/contractConfig.ts` when you deploy the contract.
-
-## 🛠️ Development
-
-### Adding New Data Templates
-
-To add new synthetic data templates:
-
-1. Edit `frontend/src/utils/dataGenerator.ts`
-2. Add your template to the `DATA_TEMPLATES` object
-3. Update the topic selection in the Generate panel
-
-### Modifying the Smart Contract
-
-1. Edit `contracts/contracts/DatasetRegistry.sol`
-2. Recompile: `npx hardhat compile`
-3. Run tests: `npx hardhat test`
-4. Redeploy: `npx hardhat run scripts/deploy.js --network localhost`
-
-### Styling Changes
-
-The project uses Tailwind CSS. Modify styles by:
-1. Editing component classes directly
-2. Updating `tailwind.config.js` for theme customization
-3. Adding custom CSS in `frontend/src/index.css`
-
-## 🔐 Security Considerations
-
-- **Private Keys**: Never commit private keys or mnemonics to version control
-- **Network Security**: Use secure RPC endpoints for production deployments
-- **Input Validation**: All user inputs are validated both client-side and on-chain
-- **Access Control**: Dataset ownership is enforced by the smart contract
-
-## 🚀 Deployment
-
-### Production Deployment
-
-1. **Deploy to a testnet or mainnet**:
-   ```bash
-   npx hardhat run scripts/deploy.js --network <network-name>
-   ```
-
-2. **Update frontend configuration** with the new contract address
-
-3. **Build the frontend**:
-   ```bash
-   cd frontend
-   npm run build
-   ```
-
-4. **Deploy the built files** to your hosting provider
+- Netlify builds the frontend (`frontend/dist`) and exposes functions at `/.netlify/functions/*`.
+- Set Netlify envs for Pinata credentials and gateway host.
+- Update `VITE_DATASET_REGISTRY_ADDRESS_OG` after contract deployment to 0G.
 
 ### Supported Networks
+- 0G Galileo Testnet (default)
+- Hardhat (local dev)
+- Ethereum Sepolia
+- Polygon Mumbai
 
-- Hardhat Local (development)
-- Ethereum Sepolia (testnet)
-- Ethereum Mainnet (production)
-- Polygon Mumbai (testnet)
-- Polygon Mainnet (production)
-
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/new-feature`
-3. Make your changes and add tests
+3. Add tests where applicable
 4. Commit your changes: `git commit -am 'Add new feature'`
 5. Push to the branch: `git push origin feature/new-feature`
 6. Submit a pull request

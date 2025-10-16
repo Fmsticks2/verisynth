@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
 import { useContractRead } from 'wagmi';
 import { computeDataHash } from '../utils/dataGenerator';
+import { uploadDatasetToIPFS, smartUploadToIPFS } from '../utils/ipfsUpload';
 import { Dataset, VerificationResult, GeneratedDataset } from '../types';
 import { CONTRACT_CONFIG } from '../utils/contractConfig';
 import Modal from './Modal';
@@ -93,6 +94,73 @@ const VerifyPanel: React.FC<VerifyPanelProps> = ({
         useAttached && attachedDataset ? attachedDataset : parsedData
       );
 
+      // Attempt to upload dataset to IPFS to generate a CID for marketplace listing
+      let uploadedCid: string | undefined;
+      try {
+        let uploadPayload: any = null;
+
+        if (useAttached && attachedDataset) {
+          uploadPayload = {
+            ...attachedDataset,
+            hash: attachedDataset.hash || computedHash,
+            metadata: {
+              ...(attachedDataset.metadata || {}),
+              verifiedAt: new Date().toISOString(),
+            },
+          };
+        } else if (parsedData) {
+          const pd: any = parsedData as any;
+          if (pd && typeof pd === 'object' && Array.isArray(pd.data)) {
+            uploadPayload = {
+              ...pd,
+              hash: pd.hash || computedHash,
+              metadata: {
+                ...(pd.metadata || {}),
+                verifiedAt: new Date().toISOString(),
+              },
+            };
+          } else if (Array.isArray(parsedData)) {
+            uploadPayload = {
+              data: parsedData as any[],
+              hash: computedHash,
+              metadata: {
+                modelVersion: 'unknown',
+                seed: 'n/a',
+                topic: 'n/a',
+                recordCount: (parsedData as any[]).length,
+                generatedAt: Date.now(),
+                verifiedAt: new Date().toISOString(),
+              },
+            };
+          } else {
+            uploadPayload = {
+              data: [parsedData],
+              hash: computedHash,
+              metadata: {
+                modelVersion: 'unknown',
+                seed: 'n/a',
+                topic: 'n/a',
+                recordCount: 1,
+                generatedAt: Date.now(),
+                verifiedAt: new Date().toISOString(),
+              },
+            };
+          }
+        }
+
+        if (uploadPayload) {
+          try {
+            const resultUpload = await uploadDatasetToIPFS(uploadPayload);
+            uploadedCid = resultUpload.cid;
+          } catch (e) {
+            const resultSim = await smartUploadToIPFS(uploadPayload);
+            uploadedCid = resultSim.cid;
+          }
+        }
+      } catch (e) {
+        console.warn('CID generation during verification failed:', e);
+      }
+
       // Optional: Fetch dataset from blockchain if ID provided
       let onChainDataset: Dataset | null = null;
       if (datasetId) {
@@ -122,6 +190,7 @@ const VerifyPanel: React.FC<VerifyPanelProps> = ({
         onChainHash: onChainDataset?.dataHash || dataHash || '',
         computedHash,
         dataset: onChainDataset || undefined,
+        uploadedCid,
       };
       
       setVerificationResult(result);
@@ -347,9 +416,18 @@ const VerifyPanel: React.FC<VerifyPanelProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-gray-50 rounded-xl p-4">
                 <h4 className="font-medium text-gray-900 mb-2">On-Chain Hash</h4>
-                <p className="text-sm font-mono text-gray-600 break-all">
-                  {verificationResult.onChainHash}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-mono text-gray-600 break-all">
+                    {verificationResult.onChainHash}
+                  </p>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(verificationResult.onChainHash)}
+                    className="p-1 hover:bg-gray-200 rounded transition-colors"
+                    title="Copy on-chain hash"
+                  >
+                    <Icon icon="ph:copy" className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
               </div>
               <div className="bg-gray-50 rounded-xl p-4">
                 <h4 className="font-medium text-gray-900 mb-2">Computed Hash</h4>
@@ -367,6 +445,36 @@ const VerifyPanel: React.FC<VerifyPanelProps> = ({
                 </div>
               </div>
             </div>
+
+            {verificationResult.uploadedCid && (
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h4 className="font-medium text-gray-900 mb-2">Uploaded IPFS CID</h4>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-mono text-sm">
+                      {truncateHash(verificationResult.uploadedCid)}
+                    </span>
+                    <a
+                      href={`https://ipfs.io/ipfs/${verificationResult.uploadedCid}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1 hover:bg-gray-200 rounded transition-colors"
+                      title="View on IPFS"
+                    >
+                      <Icon icon="ph:arrow-square-out" className="w-4 h-4 text-gray-500" />
+                    </a>
+                  </div>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(verificationResult.uploadedCid!)}
+                    className="p-1 hover:bg-gray-200 rounded transition-colors"
+                    title="Copy CID"
+                  >
+                    <Icon icon="ph:copy" className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">CID generated during verification for marketplace listing.</p>
+              </div>
+            )}
 
             {verificationResult.dataset && (
               <div className="bg-gray-50 rounded-xl p-4">

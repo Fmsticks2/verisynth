@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="VeriSynth Preview">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Logo mark -->
+  <g transform="translate(120, 120)" filter="url(#shadow)">
+    <rect x="0" y="0" width="140" height="140" rx="32" fill="#1e40af" opacity="0.15"/>
+    <path fill="#ffffff" d="M70 20l40 16v25c0 26-22 44-40 49-18-5-40-23-40-49V36l40-16z"/>
+    <path fill="#a5b4fc" d="M56 92l-14-14a6 6 0 0 1 8.5-8.5l10.3 10.3 29.5-29.5a6 6 0 1 1 8.5 8.5L72.8 95.5a6 6 0 0 1-8.5 0z"/>
+  </g>
+
+  <!-- Title and tagline -->
+  <g transform="translate(300, 180)" fill="#ffffff">
+    <text x="0" y="0" font-size="72" font-weight="700" font-family="'Poppins', sans-serif">VeriSynth</text>
+    <text x="0" y="56" font-size="28" font-weight="400" opacity="0.9" font-family="'Poppins', sans-serif">Generate, verify, and list synthetic datasets with on-chain proofs.</text>
+  </g>
+
+  <!-- Footer chips -->
+  <g transform="translate(300, 330)">
+    <rect x="0" y="0" width="300" height="56" rx="12" fill="#0b1e4b" opacity="0.35"/>
+    <text x="24" y="36" font-size="22" fill="#e5e7eb" font-family="'Poppins', sans-serif">Topic Compliance • IPFS • Marketplace</text>
+  </g>
+</svg>
