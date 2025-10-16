@@ -233,34 +233,38 @@ const App: React.FC = () => {
                 </div>
               </div>
 
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">0G Stack (Testnet)</h3>
+                <div className="grid md:grid-cols-2 gap-4 bg-gradient-to-r from-sky-50 to-cyan-50 rounded-xl p-6">
+                  <div>
+                    <p className="text-sm text-gray-700">Network</p>
+                    <ul className="space-y-1 text-gray-600 text-sm mt-1">
+                      <li>• Chain: 0G Testnet (ID: 16602)</li>
+                      <li>• RPC: https://evmrpc-testnet.0g.ai</li>
+                      <li>• Explorer: https://chainscan-galileo.0g.ai</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-700">Services</p>
+                    <ul className="space-y-1 text-gray-600 text-sm mt-1">
+                      <li>• Indexer: https://indexer-testnet.0g.ai</li>
+                      <li>• Storage: https://rpc-storage-testnet.0g.ai</li>
+                      <li>• Wallet: RainbowKit + WalletConnect</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Future Roadmap</h3>
               <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6">
                 <div className="space-y-4">
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">🚀 Phase 1: Enhanced AI Integration</h4>
-                    <ul className="space-y-1 text-gray-600 text-sm ml-4">
-                      <li>• AI model training dataset optimization</li>
-                      <li>• Advanced synthetic data generation algorithms</li>
-                      <li>• Integration with 0G's AI computation layer</li>
-                      <li>• Real-time data quality assessment</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">🔧 Phase 2: Advanced Features</h4>
+                    <h4 className="font-semibold text-gray-900 mb-2">Next Phase: Advanced Features</h4>
                     <ul className="space-y-1 text-gray-600 text-sm ml-4">
                       <li>• Multi-format dataset support (images, audio, video)</li>
                       <li>• Collaborative dataset creation tools</li>
                       <li>• Advanced privacy-preserving techniques</li>
                       <li>• Cross-chain interoperability</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">🌐 Phase 3: Ecosystem Expansion</h4>
-                    <ul className="space-y-1 text-gray-600 text-sm ml-4">
-                      <li>• Marketplace for synthetic datasets</li>
-                      <li>• Integration with major AI/ML frameworks</li>
-                      <li>• Enterprise-grade analytics dashboard</li>
-                      <li>• Decentralized governance mechanisms</li>
                     </ul>
                   </div>
                 </div>
@@ -270,7 +274,7 @@ const App: React.FC = () => {
               <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6">
                 <div className="space-y-4">
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">🚀 Phase 1: Enhanced AI Integration</h4>
+                    <h4 className="font-semibold text-gray-900 mb-2">Phase 1: Enhanced AI Integration</h4>
                     <ul className="space-y-1 text-gray-600 text-sm ml-4">
                       <li>• 0G entropy integration for distinct, on-chain randomized datasets</li>
                       <li>• Advanced generation toggle for entropy-driven shuffling and mutation</li>
@@ -279,7 +283,7 @@ const App: React.FC = () => {
                     </ul>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">🌐 Phase 3: Ecosystem Expansion</h4>
+                    <h4 className="font-semibold text-gray-900 mb-2">Phase 3: Ecosystem Expansion</h4>
                     <ul className="space-y-1 text-gray-600 text-sm ml-4">
                       <li>• Marketplace tab with on-chain catalog scaffold</li>
                       <li>• Analytics dashboard with session metrics</li>

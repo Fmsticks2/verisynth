@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("Deploying DatasetRegistry contract...");
+  console.log("Deploying DatasetRegistry, Governance, and DatasetMarketplace contracts...");
 
   // Get the ContractFactory and Signers here.
   const [deployer] = await hre.ethers.getSigners();
@@ -17,10 +17,30 @@ async function main() {
 
   console.log("DatasetRegistry deployed to:", await datasetRegistry.getAddress());
   
-  // Save the contract address and ABI to a file for frontend use
-  const contractData = {
+  // Deploy Governance contract
+  const Governance = await hre.ethers.getContractFactory("Governance");
+  const governance = await Governance.deploy();
+  await governance.waitForDeployment();
+  console.log("Governance deployed to:", await governance.getAddress());
+
+  // Deploy DatasetMarketplace with registry address
+  const DatasetMarketplace = await hre.ethers.getContractFactory("DatasetMarketplace");
+  const marketplace = await DatasetMarketplace.deploy(await datasetRegistry.getAddress());
+  await marketplace.waitForDeployment();
+  console.log("DatasetMarketplace deployed to:", await marketplace.getAddress());
+
+  // Save the contract address and ABI to files for frontend use
+  const contractDataRegistry = {
     address: await datasetRegistry.getAddress(),
     abi: DatasetRegistry.interface.format('json')
+  };
+  const contractDataGovernance = {
+    address: await governance.getAddress(),
+    abi: Governance.interface.format('json')
+  };
+  const contractDataMarketplace = {
+    address: await marketplace.getAddress(),
+    abi: DatasetMarketplace.interface.format('json')
   };
 
   const fs = require('fs');
@@ -32,10 +52,18 @@ async function main() {
     fs.mkdirSync(deploymentsDir);
   }
   
-  // Save contract address
+  // Save contract addresses
   fs.writeFileSync(
     path.join(deploymentsDir, 'DatasetRegistry.json'),
-    JSON.stringify(contractData, null, 2)
+    JSON.stringify(contractDataRegistry, null, 2)
+  );
+  fs.writeFileSync(
+    path.join(deploymentsDir, 'Governance.json'),
+    JSON.stringify(contractDataGovernance, null, 2)
+  );
+  fs.writeFileSync(
+    path.join(deploymentsDir, 'DatasetMarketplace.json'),
+    JSON.stringify(contractDataMarketplace, null, 2)
   );
   
   // Also save to frontend directory
@@ -46,7 +74,15 @@ async function main() {
   
   fs.writeFileSync(
     path.join(frontendDir, 'DatasetRegistry.json'),
-    JSON.stringify(contractData, null, 2)
+    JSON.stringify(contractDataRegistry, null, 2)
+  );
+  fs.writeFileSync(
+    path.join(frontendDir, 'Governance.json'),
+    JSON.stringify(contractDataGovernance, null, 2)
+  );
+  fs.writeFileSync(
+    path.join(frontendDir, 'DatasetMarketplace.json'),
+    JSON.stringify(contractDataMarketplace, null, 2)
   );
   
   console.log("Contract data saved to deployments and frontend directories");

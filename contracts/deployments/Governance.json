@@ -1,0 +1,22 @@
+{
+  "address": "0x4bC5D734A7BfDF126A9C076E7Ac5633173Cb3C92",
+  "abi": [
+    "constructor()",
+    "error OwnableInvalidOwner(address)",
+    "error OwnableUnauthorizedAccount(address)",
+    "event OwnershipTransferred(address indexed,address indexed)",
+    "event ProposalCreated(uint256 indexed,address indexed,string,string)",
+    "event VoteCast(uint256 indexed,address indexed,bool)",
+    "function close(uint256)",
+    "function createProposal(string,string,string) returns (uint256)",
+    "function getProposal(uint256) view returns ((uint256,string,string,string,address,uint256,uint256,uint256,bool))",
+    "function getProposalCount() view returns (uint256)",
+    "function hasVoted(uint256,address) view returns (bool)",
+    "function nextProposalId() view returns (uint256)",
+    "function owner() view returns (address)",
+    "function proposals(uint256) view returns (uint256,string,string,string,address,uint256,uint256,uint256,bool)",
+    "function renounceOwnership()",
+    "function transferOwnership(address)",
+    "function vote(uint256,bool)"
+  ]
+}

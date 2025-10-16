@@ -1,5 +1,5 @@
 {
-  "address": "0xB6EE67F0c15f949433d0e484F60f70f1828458e3",
+  "address": "0x9CC47525a6C2f3e915D44cA785c7B11dE164AF07",
   "abi": [
     "constructor()",
     "error OwnableInvalidOwner(address)",
