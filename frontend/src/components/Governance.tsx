@@ -382,7 +382,8 @@ const Governance: React.FC = () => {
             <li key={Number(p.id || 0)} className="py-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-900 font-medium">{p.title}</p>
+                  <p className="text-gray-900 font-medium">Proposal #{Number(p.id)} • {p.title}</p>
+                  <p className="text-xs text-gray-600">ID: #{Number(p.id)} • For: <span className="font-medium text-gray-900">{Number(p.forVotes)}</span> • Against: <span className="font-medium text-gray-900">{Number(p.againstVotes)}</span></p>
                   <p className="text-xs text-gray-600 break-words">{p.description}</p>
                   {p.url && (
                     <a className="text-xs text-indigo-600 underline" href={p.url} target="_blank" rel="noreferrer">External link</a>
@@ -393,13 +394,13 @@ const Governance: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center justify-between mt-2">
-                <div className="text-sm text-gray-600">For: <span className="font-medium text-gray-900">{Number(p.forVotes)}</span> • Against: <span className="font-medium text-gray-900">{Number(p.againstVotes)}</span></div>
+                <div className="text-sm text-gray-600">Copy the link to share and direct voters.</div>
                 <div className="flex items-center space-x-2">
                   <button className="btn-secondary text-xs" onClick={() => setVoteTargetId(Number(p.id))}>
                     <Icon icon="ph:checks" className="w-4 h-4 mr-1" /> Vote
                   </button>
                   <button className="btn-secondary text-xs" onClick={() => handleShareLink(Number(p.id))}>
-                    <Icon icon="ph:link-simple" className="w-4 h-4 mr-1" /> Share
+                    <Icon icon="ph:link-simple" className="w-4 h-4 mr-1" /> Copy Link
                   </button>
                 </div>
               </div>
