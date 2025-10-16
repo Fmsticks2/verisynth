@@ -60,8 +60,11 @@ const Governance: React.FC = () => {
       }
     } catch {}
     const lower = s.toLowerCase();
-    const isImage = lower.startsWith('data:image/') || /(\.png|\.jpg|\.jpeg|\.gif|\.webp)(\?.*)?$/i.test(lower);
-    return isImage ? { imageUrl: s } : { externalUrl: s };
+    const isIpfsGateway = /\/ipfs\//i.test(lower) || /pinata\.cloud\/ipfs\//i.test(lower) || /ipfs\.io\/ipfs\//i.test(lower);
+    const isImage = lower.startsWith('data:image/') || /(\.png|\.jpg|\.jpeg|\.gif|\.webp)(\?.*)?$/i.test(lower) || isIpfsGateway;
+    // If it looks like IPFS or an image, show it in preview; also expose as link
+    if (isImage) return { imageUrl: s, externalUrl: s };
+    return { externalUrl: s };
   };
 
   // Read total proposals count
@@ -75,6 +78,13 @@ const Governance: React.FC = () => {
   const [proposals, setProposals] = useState<any[]>([]);
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
   const [previewProposal, setPreviewProposal] = useState<any | null>(null);
+  // Pagination
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const pageCount = Math.max(1, Math.ceil((proposals?.length || 0) / pageSize));
+  useEffect(() => {
+    setPage((prev) => Math.min(Math.max(prev, 1), pageCount));
+  }, [pageCount]);
   useEffect(() => {
     async function loadProposals() {
       const count = Number(proposalCountData || 0);
@@ -359,7 +369,7 @@ const Governance: React.FC = () => {
 
   const handleShareLink = (id: number) => {
     const base = window.location.origin + window.location.pathname;
-    const link = `${base}?proposalId=${id}&preview=true`;
+    const link = `${base}?tab=governance&proposalId=${id}&preview=true`;
     navigator.clipboard.writeText(link).catch(() => {});
     alert('Proposal link copied to clipboard');
   };
@@ -550,45 +560,63 @@ const Governance: React.FC = () => {
             <p className="text-sm text-gray-600">Community-driven improvements</p>
           </div>
         </div>
-        <ul className="divide-y divide-gray-200">
-          {proposals.map((p: any) => (
-            <li key={Number(p.id || 0)} className="py-3">
-              {p.imageUrl && (
-                <div className="h-24 rounded-lg mb-2 bg-cover bg-center" style={{ backgroundImage: `url(${p.imageUrl})` }} />
-              )}
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-900 font-medium">Proposal #{Number(p.id)} • {p.title}</p>
-                  <p className="text-xs text-gray-600">
-                    ID: #{Number(p.id)} • For: <span className="font-medium text-gray-900">{Number(p.forVotes)}</span> • Against: <span className="font-medium text-gray-900">{Number(p.againstVotes)}</span>
-                  </p>
-                  <p className="text-xs text-gray-600 break-words">{p.description}</p>
-                  {p.externalUrl && (
-                    <a className="text-xs text-indigo-600 underline" href={p.externalUrl} target="_blank" rel="noreferrer">External link</a>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">Proposer: {p.proposer?.slice(0,6)}...{p.proposer?.slice(-4)} • Created: {p.createdAt ? new Date(p.createdAt * 1000).toLocaleString() : '—'}</p>
-                </div>
-                <div className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                  {p.closed ? 'Closed' : 'Open'}
-                </div>
+        {/* Pagination Controls and List */}
+        {(() => {
+          const start = (page - 1) * pageSize;
+          const visible = proposals.slice(start, start + pageSize);
+          return (
+            <>
+              <ul className="divide-y divide-gray-200">
+                {visible.map((p: any) => (
+                  <li key={Number(p.id || 0)} className="py-3">
+                    {p.imageUrl && (
+                      <div className="h-24 rounded-lg mb-2 bg-cover bg-center" style={{ backgroundImage: `url(${p.imageUrl})` }} />
+                    )}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-900 font-medium">Proposal #{Number(p.id)} • {p.title}</p>
+                        <p className="text-xs text-gray-600">
+                          ID: #{Number(p.id)} • For: <span className="font-medium text-gray-900">{Number(p.forVotes)}</span> • Against: <span className="font-medium text-gray-900">{Number(p.againstVotes)}</span>
+                        </p>
+                        <p className="text-xs text-gray-600 break-words">{p.description}</p>
+                        {p.externalUrl && (
+                          <a className="text-xs text-indigo-600 underline" href={p.externalUrl} target="_blank" rel="noreferrer">External link</a>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">Proposer: {p.proposer?.slice(0,6)}...{p.proposer?.slice(-4)} • Created: {p.createdAt ? new Date(p.createdAt * 1000).toLocaleString() : '—'}</p>
+                      </div>
+                      <div className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                        {p.closed ? 'Closed' : 'Open'}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <div className="text-sm text-gray-600">Copy the link to share and direct voters.</div>
+                      <div className="flex items-center space-x-2">
+                        <button className="btn-secondary text-xs" onClick={() => { setVoteTargetId(Number(p.id)); voteSectionRef.current?.scrollIntoView({ behavior: 'smooth' }); }}>
+                          <Icon icon="ph:checks" className="w-4 h-4 mr-1" /> Vote
+                        </button>
+                        <button className="btn-secondary text-xs" onClick={() => openPreview(p)}>
+                          <Icon icon="ph:eye" className="w-4 h-4 mr-1" /> Preview
+                        </button>
+                        <button className="btn-secondary text-xs" onClick={() => handleShareLink(Number(p.id))}>
+                          <Icon icon="ph:link-simple" className="w-4 h-4 mr-1" /> Copy Link
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-center justify-between mt-4">
+                <button className="btn-secondary text-xs" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  <Icon icon="ph:arrow-left" className="w-4 h-4 mr-1" /> Previous
+                </button>
+                <span className="text-xs text-gray-600">Page {page} of {pageCount}</span>
+                <button className="btn-secondary text-xs" disabled={page >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))}>
+                  Next <Icon icon="ph:arrow-right" className="w-4 h-4 ml-1" />
+                </button>
               </div>
-              <div className="flex items-center justify-between mt-2">
-                <div className="text-sm text-gray-600">Copy the link to share and direct voters.</div>
-                <div className="flex items-center space-x-2">
-                  <button className="btn-secondary text-xs" onClick={() => { setVoteTargetId(Number(p.id)); voteSectionRef.current?.scrollIntoView({ behavior: 'smooth' }); }}>
-                    <Icon icon="ph:checks" className="w-4 h-4 mr-1" /> Vote
-                  </button>
-                  <button className="btn-secondary text-xs" onClick={() => openPreview(p)}>
-                    <Icon icon="ph:eye" className="w-4 h-4 mr-1" /> Preview
-                  </button>
-                  <button className="btn-secondary text-xs" onClick={() => handleShareLink(Number(p.id))}>
-                    <Icon icon="ph:link-simple" className="w-4 h-4 mr-1" /> Copy Link
-                  </button>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
+            </>
+          );
+        })()}
       </motion.div>
     </div>
   );

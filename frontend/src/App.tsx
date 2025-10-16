@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Header from './components/Header';
 import GeneratePanel from './components/GeneratePanel';
@@ -15,6 +15,16 @@ type ActiveTab = 'generate' | 'verify' | 'history' | 'marketplace' | 'analytics'
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('generate');
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const proposalId = params.get('proposalId');
+    if (tab === 'governance' || proposalId) {
+      setActiveTab('governance');
+    } else if (tab && ['generate','verify','history','marketplace','analytics','docs'].includes(tab)) {
+      setActiveTab(tab as ActiveTab);
+    }
+  }, []);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [lastGenerated, setLastGenerated] = useState<GeneratedDataset | null>(null);
   const [verificationContext, setVerificationContext] = useState<{
