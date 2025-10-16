@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { usePrepareContractWrite, useContractWrite, useWaitForTransaction, useContractRead, usePublicClient, useWalletClient, useSwitchNetwork, useNetwork } from 'wagmi';
+import { useContractRead, usePublicClient, useWalletClient, useSwitchNetwork, useNetwork } from 'wagmi';
 import { GOVERNANCE_CONFIG } from '../utils/governanceConfig';
 
 const Governance: React.FC = () => {
@@ -11,6 +11,7 @@ const Governance: React.FC = () => {
   const [url, setUrl] = useState('');
   const [selectedProposalId, setSelectedProposalId] = useState<number | null>(null);
   const publicClient = usePublicClient();
+  const voteSectionRef = useRef<HTMLDivElement | null>(null);
   const { data: walletClient } = useWalletClient();
   const { switchNetworkAsync } = useSwitchNetwork();
   const { chain } = useNetwork();
@@ -28,10 +29,14 @@ const Governance: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const pid = params.get('proposalId');
     if (pid) setSelectedProposalId(parseInt(pid));
+    // Smooth scroll to voting section if deep-linked
+    setTimeout(() => {
+      voteSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
   }, []);
 
   // Read total proposals count
-  const { data: proposalCountData, refetch: refetchCount } = useContractRead({
+  const { data: proposalCountData } = useContractRead({
     address: GOVERNANCE_CONFIG.address,
     abi: GOVERNANCE_CONFIG.abi,
     functionName: 'getProposalCount',
@@ -47,11 +52,35 @@ const Governance: React.FC = () => {
         try {
           const resp = await publicClient?.readContract({
             address: GOVERNANCE_CONFIG.address,
-            abi: GOVERNANCE_CONFIG.abi as any,
+            abi: GOVERNANCE_CONFIG.abi,
             functionName: 'getProposal',
             args: [BigInt(i)],
           });
-          if (resp) arr.push(resp);
+          if (resp) {
+            const r: any = resp as any;
+            const parsed = Array.isArray(r) ? {
+              id: Number(r[0]),
+              title: r[1],
+              description: r[2],
+              url: r[3],
+              proposer: r[4],
+              createdAt: Number(r[5] || 0),
+              forVotes: Number(r[6] || 0),
+              againstVotes: Number(r[7] || 0),
+              closed: Boolean(r[8] || false),
+            } : {
+              id: Number(r.id || 0),
+              title: r.title,
+              description: r.description,
+              url: r.url,
+              proposer: r.proposer,
+              createdAt: Number(r.createdAt || 0),
+              forVotes: Number(r.forVotes || 0),
+              againstVotes: Number(r.againstVotes || 0),
+              closed: Boolean(r.closed || false),
+            };
+            arr.push(parsed);
+          }
         } catch (e) {
           // Ignore read errors for demo
         }
@@ -61,52 +90,10 @@ const Governance: React.FC = () => {
     loadProposals();
   }, [proposalCountData, publicClient]);
 
-  // Prepare createProposal
+  // Create proposal via wallet
   const canCreate = title.trim().length > 0;
-  const { config: createConfig } = usePrepareContractWrite({
-    address: GOVERNANCE_CONFIG.address,
-    abi: GOVERNANCE_CONFIG.abi,
-    functionName: 'createProposal',
-    args: canCreate ? [title, description, url] : undefined,
-    enabled: canCreate,
-  });
-  const { data: createData } = useContractWrite(createConfig);
-  const { isSuccess: createSuccess } = useWaitForTransaction({ hash: createData?.hash });
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (createSuccess) {
-      setTitle('');
-      setDescription('');
-      setUrl('');
-      refetchCount?.();
-      // reload proposals after creation
-      (async () => {
-        try {
-          const count = Number(await publicClient?.readContract({
-            address: GOVERNANCE_CONFIG.address,
-            abi: GOVERNANCE_CONFIG.abi as any,
-            functionName: 'getProposalCount',
-            args: [],
-          }) || 0);
-          const arr: any[] = [];
-          for (let i = 1; i <= count; i++) {
-            try {
-              const resp = await publicClient?.readContract({
-                address: GOVERNANCE_CONFIG.address,
-                abi: GOVERNANCE_CONFIG.abi as any,
-                functionName: 'getProposal',
-                args: [BigInt(i)],
-              });
-              if (resp) arr.push(resp);
-            } catch {}
-          }
-          setProposals(arr);
-        } catch {}
-      })();
-    }
-  }, [createSuccess]);
 
   const handleSubmitProposal = async () => {
     setCreateError(null);
@@ -138,7 +125,31 @@ const Governance: React.FC = () => {
             functionName: 'getProposal',
             args: [BigInt(i)],
           });
-          if (resp) arr.push(resp);
+          if (resp) {
+            const r: any = resp as any;
+            const parsed = Array.isArray(r) ? {
+              id: Number(r[0]),
+              title: r[1],
+              description: r[2],
+              url: r[3],
+              proposer: r[4],
+              createdAt: Number(r[5] || 0),
+              forVotes: Number(r[6] || 0),
+              againstVotes: Number(r[7] || 0),
+              closed: Boolean(r[8] || false),
+            } : {
+              id: Number(r.id || 0),
+              title: r.title,
+              description: r.description,
+              url: r.url,
+              proposer: r.proposer,
+              createdAt: Number(r.createdAt || 0),
+              forVotes: Number(r.forVotes || 0),
+              againstVotes: Number(r.againstVotes || 0),
+              closed: Boolean(r.closed || false),
+            };
+            arr.push(parsed);
+          }
         } catch {}
       }
       setProposals(arr);
@@ -152,48 +163,8 @@ const Governance: React.FC = () => {
   // Voting
   const [voteTargetId, setVoteTargetId] = useState<number | null>(null);
   const [voteSupport, setVoteSupport] = useState<boolean>(true);
-  const { config: voteConfig } = usePrepareContractWrite({
-    address: GOVERNANCE_CONFIG.address,
-    abi: GOVERNANCE_CONFIG.abi,
-    functionName: 'vote',
-    args: voteTargetId ? [BigInt(voteTargetId), voteSupport] : undefined,
-    enabled: Boolean(voteTargetId !== null),
-  });
-  const { data: voteData } = useContractWrite(voteConfig);
-  const { isSuccess: voteSuccess } = useWaitForTransaction({ hash: voteData?.hash });
   const [voteBusy, setVoteBusy] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (voteSuccess) {
-      setVoteTargetId(null);
-      refetchCount?.();
-      // reload proposals to reflect updated vote counts
-      (async () => {
-        try {
-          const count = Number(await publicClient?.readContract({
-            address: GOVERNANCE_CONFIG.address,
-            abi: GOVERNANCE_CONFIG.abi as any,
-            functionName: 'getProposalCount',
-            args: [],
-          }) || 0);
-          const arr: any[] = [];
-          for (let i = 1; i <= count; i++) {
-            try {
-              const resp = await publicClient?.readContract({
-                address: GOVERNANCE_CONFIG.address,
-                abi: GOVERNANCE_CONFIG.abi as any,
-                functionName: 'getProposal',
-                args: [BigInt(i)],
-              });
-              if (resp) arr.push(resp);
-            } catch {}
-          }
-          setProposals(arr);
-        } catch {}
-      })();
-    }
-  }, [voteSuccess]);
 
   const handleCastVote = async () => {
     setVoteError(null);
@@ -226,7 +197,31 @@ const Governance: React.FC = () => {
             functionName: 'getProposal',
             args: [BigInt(i)],
           });
-          if (resp) arr.push(resp);
+          if (resp) {
+            const r: any = resp as any;
+            const parsed = Array.isArray(r) ? {
+              id: Number(r[0]),
+              title: r[1],
+              description: r[2],
+              url: r[3],
+              proposer: r[4],
+              createdAt: Number(r[5] || 0),
+              forVotes: Number(r[6] || 0),
+              againstVotes: Number(r[7] || 0),
+              closed: Boolean(r[8] || false),
+            } : {
+              id: Number(r.id || 0),
+              title: r.title,
+              description: r.description,
+              url: r.url,
+              proposer: r.proposer,
+              createdAt: Number(r.createdAt || 0),
+              forVotes: Number(r.forVotes || 0),
+              againstVotes: Number(r.againstVotes || 0),
+              closed: Boolean(r.closed || false),
+            };
+            arr.push(parsed);
+          }
         } catch {}
       }
       setProposals(arr);
@@ -328,7 +323,7 @@ const Governance: React.FC = () => {
               {createError && <p className="text-xs text-red-600 mt-1">{createError}</p>}
             </div>
           </div>
-          <div className="p-4 bg-gray-50 rounded-xl">
+          <div className="p-4 bg-gray-50 rounded-xl" ref={voteSectionRef}>
             <h3 className="font-semibold text-gray-900 mb-2">Voting</h3>
             <p className="text-sm text-gray-600">Pick a proposal and cast your vote.</p>
             <div className="flex items-center space-x-2 mt-3">
@@ -383,11 +378,14 @@ const Governance: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-900 font-medium">Proposal #{Number(p.id)} • {p.title}</p>
-                  <p className="text-xs text-gray-600">ID: #{Number(p.id)} • For: <span className="font-medium text-gray-900">{Number(p.forVotes)}</span> • Against: <span className="font-medium text-gray-900">{Number(p.againstVotes)}</span></p>
+                  <p className="text-xs text-gray-600">
+                    ID: #{Number(p.id)} • For: <span className="font-medium text-gray-900">{Number(p.forVotes)}</span> • Against: <span className="font-medium text-gray-900">{Number(p.againstVotes)}</span>
+                  </p>
                   <p className="text-xs text-gray-600 break-words">{p.description}</p>
                   {p.url && (
                     <a className="text-xs text-indigo-600 underline" href={p.url} target="_blank" rel="noreferrer">External link</a>
                   )}
+                  <p className="text-xs text-gray-500 mt-1">Proposer: {p.proposer?.slice(0,6)}...{p.proposer?.slice(-4)} • Created: {p.createdAt ? new Date(p.createdAt * 1000).toLocaleString() : '—'}</p>
                 </div>
                 <div className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
                   {p.closed ? 'Closed' : 'Open'}
@@ -396,7 +394,7 @@ const Governance: React.FC = () => {
               <div className="flex items-center justify-between mt-2">
                 <div className="text-sm text-gray-600">Copy the link to share and direct voters.</div>
                 <div className="flex items-center space-x-2">
-                  <button className="btn-secondary text-xs" onClick={() => setVoteTargetId(Number(p.id))}>
+                  <button className="btn-secondary text-xs" onClick={() => { setVoteTargetId(Number(p.id)); voteSectionRef.current?.scrollIntoView({ behavior: 'smooth' }); }}>
                     <Icon icon="ph:checks" className="w-4 h-4 mr-1" /> Vote
                   </button>
                   <button className="btn-secondary text-xs" onClick={() => handleShareLink(Number(p.id))}>

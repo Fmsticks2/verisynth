@@ -60,8 +60,10 @@ const Analytics: React.FC<AnalyticsProps> = ({ datasets, lastGenerated }) => {
               functionName: 'getDataset',
               args: [BigInt(total)],
             });
-            // last.timestamp at index 6 in struct order
-            lastDatasetTs = Number((last as any).timestamp ?? 0);
+            const lr: any = last as any;
+            lastDatasetTs = Array.isArray(lr)
+              ? Number(lr[6] || 0) // timestamp index in struct tuple
+              : Number(lr?.timestamp ?? 0);
           } catch (_) {}
         }
 
@@ -97,7 +99,9 @@ const Analytics: React.FC<AnalyticsProps> = ({ datasets, lastGenerated }) => {
               functionName: 'getProposal',
               args: [BigInt(p)],
             });
-            if (prop && !(prop as any).closed) activeProposals += 1;
+            const r: any = prop as any;
+            const closed = Array.isArray(r) ? Boolean(r[8] || false) : Boolean(r?.closed || false);
+            if (!closed) activeProposals += 1;
           } catch (_) {}
         }
 
