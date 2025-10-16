@@ -1,20 +1,20 @@
 # Netlify Deployment Guide for VeriSynth
 
-This guide explains how to deploy VeriSynth with secure server-side API endpoints using Netlify Functions.
+This guide explains how to deploy VeriSynth with a secure server-side upload proxy using Netlify Functions.
 
 ## Overview
 
-The application now includes a secure server-side API endpoint for generating Pinata signed URLs, which keeps your API keys safe and avoids CORS issues.
+Uploads are performed via a Netlify Function that proxies JSON payloads to Pinata (`pinJSONToIPFS`). This keeps credentials server-side and avoids browser CORS issues.
 
 ## Files Created
 
 ### 1. Netlify Function
-- **`netlify/functions/create-signed-url.ts`** - Server-side function for signed URL generation
+- **`netlify/functions/pinata-upload.js`** - Server-side proxy for `pinJSONToIPFS`
 - **`netlify/functions/package.json`** - Dependencies for Netlify Functions
 
 ### 2. Configuration Updates
 - **`netlify.toml`** - Updated to include functions directory
-- **`frontend/src/api/upload.ts`** - Updated to call production endpoint
+- **`frontend/src/utils/ipfsUpload.ts`** - Calls the Netlify Function endpoint
 
 ## Deployment Steps
 
@@ -24,6 +24,9 @@ In your Netlify dashboard, go to **Site settings > Environment variables** and a
 
 ```
 PINATA_JWT=your_pinata_jwt_token_here
+# or
+PINATA_API_KEY=your_pinata_api_key
+PINATA_SECRET_API_KEY=your_pinata_secret
 ```
 
 **Important**: Use `PINATA_JWT` (not `VITE_PINATA_JWT`) since this runs on the server side.
@@ -36,30 +39,30 @@ PINATA_JWT=your_pinata_jwt_token_here
 
 ### 3. Verify Deployment
 
-After deployment, your API endpoint will be available at:
+After deployment, your Function endpoint will be available at:
 ```
-https://your-site-name.netlify.app/.netlify/functions/create-signed-url
+https://your-site-name.netlify.app/.netlify/functions/pinata-upload
 ```
 
 ## How It Works
 
 ### Development Mode
-- Uses client-side signed URL creation (may have CORS issues)
-- Falls back to simulation mode if signed URL creation fails
-- Logs warnings about client-side usage
+- Use `netlify dev` to run the Function locally
+- Client calls `/.netlify/functions/pinata-upload`
+- If the Function is unavailable, upload falls back to simulation
 
 ### Production Mode
-- Frontend calls `/.netlify/functions/create-signed-url`
-- Netlify Function securely creates signed URLs using server-side API key
-- Returns signed URL to frontend for direct IPFS upload
-- No CORS issues since the URL is pre-authorized
+- Frontend posts JSON payloads to `/.netlify/functions/pinata-upload`
+- Netlify Function validates input and uses server credentials to pin JSON
+- Returns CID and gateway URL to the client
+- No CORS issues since uploads originate from the server
 
 ## Security Benefits
 
-1. **API Key Protection**: Pinata JWT stays secure on the server
-2. **CORS Bypass**: Signed URLs eliminate browser CORS restrictions
-3. **Time-Limited Access**: URLs expire after specified time (default: 1 hour)
-4. **Request Validation**: Server validates all requests before processing
+1. **API Key Protection**: Credentials remain on the server
+2. **CORS Bypass**: Server-side uploads avoid browser CORS
+3. **Input Validation**: Function validates JSON payloads and metadata
+4. **Controlled Metadata**: Enforces safe defaults and limits key-value metadata
 
 ## Testing
 
@@ -91,7 +94,7 @@ netlify dev
 
 3. **CORS errors in development**
    - Use `netlify dev` for local testing with functions
-   - Or rely on simulation mode for development
+   - Or rely on simulation mode when the Function is not running
 
 ### Monitoring
 
@@ -109,5 +112,5 @@ netlify dev
 
 1. Test the deployment thoroughly
 2. Monitor function performance and errors
-3. Consider implementing caching for frequently requested signed URLs
+3. Consider implementing request throttling and caching for frequent uploads
 4. Set up monitoring and alerting for production issues

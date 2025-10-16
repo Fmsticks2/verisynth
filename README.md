@@ -209,11 +209,11 @@ verisynth/
 5. Push to the branch: `git push origin feature/new-feature`
 6. Submit a pull request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🆘 Support
+## Support
 
 If you encounter any issues or have questions:
 
@@ -221,7 +221,7 @@ If you encounter any issues or have questions:
 2. Create a new issue with detailed information
 3. Join our community discussions
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - OpenZeppelin for secure smart contract libraries
 - RainbowKit for excellent Web3 wallet integration
@@ -231,7 +231,7 @@ If you encounter any issues or have questions:
 
 **VeriSynth** - Ensuring synthetic data integrity through blockchain technology.
 
-## ✅ Implementation Status (Phase 1 & Phase 3)
+## Implementation Status (Phase 1 & Phase 3)
 
 ### Phase 1: Enhanced AI Integration — Implemented
 - Integration with 0G AI computation layer for entropy: dataset generation can pull on-chain block-derived randomness to ensure distinct outputs even with similar seeds.
@@ -245,7 +245,7 @@ If you encounter any issues or have questions:
 - Governance: proposal and voting placeholders with UI components for future on-chain governance.
 - Framework integration: HuggingFace JSON export, plus CSV/NDJSON for standard pipelines.
 
-## 🔭 Upcoming Work
+## Upcoming Work
 
 ### Phase 1 Next Steps
 - Connect remote 0G compute jobs for model-assisted generation when available.
@@ -256,7 +256,7 @@ If you encounter any issues or have questions:
 - Organization-wide analytics pulling on-chain/IPFS telemetry and quality trends.
 - Decentralized governance contracts for proposals, voting, execution, and treasury.
 
-## 🧩 Where to Look in Code
+## Where to Look in Code
 - `frontend/src/utils/ogCompute.ts`: 0G entropy and remote compute hook.
 - `frontend/src/utils/dataQuality.ts`: quality metrics calculation.
 - `frontend/src/utils/dataGenerator.ts`: entropy-aware generation and hashing.

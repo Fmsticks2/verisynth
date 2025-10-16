@@ -2,27 +2,38 @@
 
 ## Environment Variables Required
 
-To enable real IPFS uploads using Pinata, you need to set up the following environment variables in your `.env` file:
+VeriSynth uses a Netlify Function proxy for uploads. Configure variables as follows:
 
+Client (`frontend/.env`):
 ```env
-# Pinata Configuration
-VITE_PINATA_JWT=your_pinata_jwt_token_here
 VITE_PINATA_GATEWAY_URL=https://gateway.pinata.cloud
+```
+
+Server (Netlify dashboard → Site settings → Environment variables):
+```text
+# Choose ONE auth method
+PINATA_JWT=your_pinata_jwt_token_here
+# or
+PINATA_API_KEY=your_api_key
+PINATA_SECRET_API_KEY=your_secret_key
+
+# Optional (for building public URLs)
+PINATA_GATEWAY_URL=gateway.pinata.cloud
 ```
 
 ## How to Get Your Pinata JWT Token
 
 1. Go to [Pinata.cloud](https://pinata.cloud) and create an account
-2. Navigate to the API Keys section in your dashboard
-3. Create a new API key with the following permissions:
-   - `pinFileToIPFS`
-   - `pinJSONToIPFS` 
+2. Navigate to the API Keys section
+3. Create a new API key or JWT with permissions:
+   - `pinJSONToIPFS` (required)
+   - `pinFileToIPFS` (optional, not used by client)
    - `unpin` (optional)
-4. Copy the JWT token and add it to your `.env` file
+4. Add credentials to your Netlify site’s environment variables (not the client `.env`)
 
 ## Testing the Upload
 
-1. Make sure your environment variables are set correctly
+1. Configure Netlify environment variables as above
 2. Start the development server: `npm run dev`
 3. Navigate to the Generate Panel
 4. Fill in the form (seed, topic, record count)
@@ -32,15 +43,15 @@ VITE_PINATA_GATEWAY_URL=https://gateway.pinata.cloud
 ## Fallback Behavior
 
 The application includes intelligent fallback behavior:
-- If Pinata credentials are missing or invalid, it will fall back to simulation mode
-- If the upload fails, it will retry with simulation
-- All uploads include proper error handling and user feedback
+- If server credentials are missing/invalid, upload falls back to simulation
+- If upload fails, it retries with simulation and surfaces error details
+- Clear user feedback and structured error messages
 
 ## Upload Process
 
-1. **Real Upload**: Uses Pinata SDK to upload JSON data to IPFS
+1. **Server Proxy Upload**: Netlify Function posts JSON to Pinata (`pinJSONToIPFS`)
 2. **Metadata**: Includes dataset metadata (model version, seed, topic, etc.)
-3. **CID Return**: Returns the actual IPFS Content Identifier (CID)
-4. **Smart Contract**: Registers the CID on the blockchain for verification
+3. **CID Return**: Returns the IPFS Content Identifier (CID) and gateway URL
+4. **Smart Contract**: Registers the CID on-chain for verification
 
 The uploaded data can be accessed via: `https://gateway.pinata.cloud/ipfs/{CID}`

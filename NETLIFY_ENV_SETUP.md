@@ -13,7 +13,7 @@ This document provides instructions for configuring environment variables in Net
 
 ```
 VITE_OG_RPC_URL = https://evmrpc-testnet.0g.ai
-VITE_OG_CHAIN_ID = 16601
+VITE_OG_CHAIN_ID = 16602
 VITE_OG_INDEXER_URL = https://indexer-testnet.0g.ai
 VITE_OG_STORAGE_URL = https://rpc-storage-testnet.0g.ai
 VITE_OG_BLOCK_EXPLORER_URL = https://chainscan-galileo.0g.ai
@@ -30,7 +30,7 @@ VITE_WALLETCONNECT_PROJECT_ID = your_walletconnect_project_id_here
 VITE_APP_NAME = VeriSynth
 VITE_APP_DESCRIPTION = Verifiable Synthetic Data Generation and Verification
 VITE_NODE_ENV = production
-VITE_IPFS_GATEWAY_URL = https://ipfs.io/ipfs/
+VITE_PINATA_GATEWAY_URL = https://gateway.pinata.cloud
 ```
 
 ### Contract Addresses (Update after deployment)
@@ -51,6 +51,7 @@ VITE_DATASET_REGISTRY_ADDRESS_OG = your_deployed_contract_address_on_0g_testnet
 2. **Update Contract Address:**
    - Copy the deployed contract address
    - Update `VITE_DATASET_REGISTRY_ADDRESS_OG` in Netlify environment variables
+   - Alternatively, configure addresses in `frontend/src/utils/contractConfig.ts`
 
 3. **Deploy Frontend:**
    - Push your code to your connected Git repository
@@ -63,10 +64,13 @@ The `netlify.toml` file is already configured with:
 - Publish directory: `frontend/dist`
 - Node.js version: 18
 - SPA redirect rules
+- Functions directory: `netlify/functions`
 
 ## Important Notes
 
 - Never commit sensitive keys or private keys to your repository
 - The WalletConnect Project ID is required for wallet connections
 - Update contract addresses after deploying to 0G testnet
-- All environment variables must be prefixed with `VITE_` for Vite to expose them to the client
+- Client-visible variables must be prefixed with `VITE_` (e.g., `VITE_PINATA_GATEWAY_URL`).
+- Server-only variables for uploads must NOT be prefixed with `VITE_` and should be configured in Netlify:
+  - `PINATA_JWT` or `PINATA_API_KEY` + `PINATA_SECRET_API_KEY`

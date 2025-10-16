@@ -1,390 +1,224 @@
-# IPFS Integration with Pinata SDK
+# IPFS Integration
 
-This document provides a comprehensive guide to the IPFS integration implemented in this project using the Pinata SDK.
+This document explains how VeriSynth integrates IPFS via Pinata. Uploads are performed through a secure Netlify Function proxy to avoid CORS and protect credentials. Client-side operations focus on JSON-only uploads, CID verification, and metadata management.
 
-## 🚀 Features
+## Features
+- JSON dataset upload with secure metadata via server proxy
+- Optional post-upload verification and CID existence checks
+- Pinata Groups management helpers
+- Client-side rate limiting and input validation
+- Comprehensive error handling
 
-### Core Functionality
-- **File Upload**: Direct file uploads to IPFS via Pinata
-- **Dataset Upload**: Structured dataset uploads with metadata
-- **File Verification**: CID validation and integrity checking
-- **Groups Management**: Organize files using Pinata Groups
-- **Metadata Support**: Rich metadata and keyvalues for file organization
-- **Security**: Rate limiting, input validation, and secure configuration
-- **Error Handling**: Comprehensive error handling and fallback mechanisms
-
-### New Capabilities Added
-1. **CID-based File Verification**: Validate file integrity using IPFS CIDs
-2. **Metadata and Keyvalues**: Enhanced file organization and searchability
-3. **Pinata Groups**: Dataset organization and management
-4. **Security Enhancements**: Rate limiting, input sanitization, secure configuration
-5. **Comprehensive Testing**: Full test suite for all functionality
-
-## 📁 File Structure
-
+## File Structure
 ```
 frontend/src/utils/
-├── ipfsUpload.ts          # Core upload functionality
-├── ipfsVerification.ts    # File verification and integrity checking
-├── pinataGroups.ts        # Groups management
-├── pinataConfig.ts        # Configuration and security utilities
-├── ipfsTest.ts           # Comprehensive test suite
-└── index.ts              # Utility exports
+├── ipfsUpload.ts          # Upload via Netlify proxy (JSON-only)
+├── ipfsVerification.ts    # CID validation and integrity checks
+├── pinataGroups.ts        # Pinata Groups helpers
+├── pinataConfig.ts        # Client-side config, rate limiter, validation
+├── ipfsTest.ts            # Test suite
+└── index.ts               # Utility exports
+
+netlify/functions/
+└── pinata-upload.js       # Server proxy for pinJSONToIPFS
 ```
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
-Copy `.env.example` to `.env` and configure:
-
-```bash
-# Required: Pinata JWT Token
-VITE_PINATA_JWT=your_pinata_jwt_token_here
-
-# Optional: Gateway URL
+Client (`frontend/.env`):
+```env
+# Gateway host used for reads and verification
 VITE_PINATA_GATEWAY_URL=gateway.pinata.cloud
-
-# Optional: API Key/Secret (JWT takes precedence)
-VITE_PINATA_API_KEY=your_pinata_api_key_here
-VITE_PINATA_SECRET_API_KEY=your_pinata_secret_key_here
-
-# Optional: File size limit (bytes)
-VITE_MAX_FILE_SIZE=104857600  # 100MB
-
-# Optional: Rate limiting
-VITE_PINATA_RATE_LIMIT_CALLS=10
-VITE_PINATA_RATE_LIMIT_WINDOW=60000
-
-# Development
-VITE_ENABLE_IPFS_SIMULATION=false
 ```
 
-### Getting Pinata Credentials
+Server (Netlify dashboard → Site settings → Environment variables):
+```text
+# One of the following is required
+PINATA_JWT=<pinata_jwt>
+# or
+PINATA_API_KEY=<pinata_api_key>
+PINATA_SECRET_API_KEY=<pinata_secret>
 
-1. Visit [Pinata Cloud](https://app.pinata.cloud/)
-2. Create an account or sign in
-3. Go to API Keys section
-4. Create a new JWT token with appropriate permissions
-5. Copy the JWT token to your `.env` file
+# Optional, used to construct public URLs
+PINATA_GATEWAY_URL=gateway.pinata.cloud
+```
 
-## 📚 Usage Examples
+## Usage Examples
 
-### Basic File Upload
-
+### Basic JSON Upload
 ```typescript
 import { uploadToIPFS } from './utils/ipfsUpload';
 
-const file = new File(['Hello World'], 'hello.txt', { type: 'text/plain' });
+// Example JSON payload (object)
+const payload = {
+  title: 'Example dataset',
+  records: [{ id: 1, value: 'a' }, { id: 2, value: 'b' }],
+};
 
-const result = await uploadToIPFS(file, {
+const result = await uploadToIPFS(payload, {
+  filename: 'dataset.json',
   metadata: {
-    name: 'My File',
-    description: 'A simple text file'
+    name: 'Example Dataset',
+    keyvalues: { type: 'dataset', version: '1.0.0' },
   },
-  keyvalues: {
-    category: 'documents',
-    version: '1.0'
-  },
-  verifyAfterUpload: true
+  verify: true,
 });
 
-if (result.success) {
-  console.log('File uploaded:', result.cid);
-  console.log('Verified:', result.verified);
-}
+console.log('CID:', result.cid);
+console.log('Gateway URL:', result.url);
+console.log('Verified:', result.verified);
 ```
 
 ### Dataset Upload
-
 ```typescript
 import { uploadDatasetToIPFS } from './utils/ipfsUpload';
 
 const dataset = {
-  name: 'User Data',
-  records: [
-    { id: 1, name: 'John' },
-    { id: 2, name: 'Jane' }
-  ]
+  metadata: { topic: 'users', modelVersion: 'v1' },
+  data: [
+    { id: 1, name: 'Alice' },
+    { id: 2, name: 'Bob' },
+  ],
+  hash: 'sha256-hex-string',
 };
 
 const result = await uploadDatasetToIPFS(dataset, {
+  filename: 'users-v1.json',
   metadata: {
-    name: 'User Dataset',
-    description: 'Sample user data'
+    name: 'Users Dataset v1',
+    keyvalues: { type: 'dataset', format: 'json', version: '1.0.0' },
   },
-  keyvalues: {
-    type: 'dataset',
-    format: 'json'
-  }
+  verify: true,
 });
 ```
 
-### File Verification
-
+### CID Verification
 ```typescript
-import { verifyFileIntegrity, isValidCID } from './utils/ipfsVerification';
+import { isValidCID, verifyCIDExists, verifyFileIntegrity } from './utils/ipfsVerification';
 
-// Validate CID format
-const isValid = isValidCID('QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG');
+const cid = 'bafy...';
+if (isValidCID(cid)) {
+  const exists = await verifyCIDExists(cid);
+  console.log('CID exists:', exists.exists);
 
-// Verify file integrity
-const verification = await verifyFileIntegrity('your-cid-here');
-if (verification.isValid) {
-  console.log('File is valid and accessible');
+  const integrity = await verifyFileIntegrity(cid);
+  console.log('SHA-256 content hash:', integrity.calculatedHash);
 }
 ```
 
 ### Groups Management
-
 ```typescript
-import { createGroup, addFileToGroup, listGroups } from './utils/pinataGroups';
+import { createGroup, addFilesToGroup, listGroups } from './utils/pinataGroups';
 
-// Create a group
-const group = await createGroup({
-  name: 'My Dataset Group',
-  isPublic: false
-});
+// Create a group (requires server-side credentials)
+const group = await createGroup({ name: 'My Dataset Group', isPublic: false });
 
-// Upload file to group
-const result = await uploadToIPFS(file, {
-  groupId: group.id,
-  metadata: { name: 'Group File' }
-});
+// Add CID(s) to group
+await addFilesToGroup(group.id, [{ cid: 'bafy...', name: 'users-v1.json' }]);
 
 // List all groups
 const groups = await listGroups();
 ```
 
 ### Smart Upload with Fallback
-
 ```typescript
 import { smartUploadToIPFS } from './utils/ipfsUpload';
 
-const result = await smartUploadToIPFS(file, {
-  metadata: {
-    name: 'Smart Upload Test',
-    description: 'Uses fallback if needed'
-  }
+const result = await smartUploadToIPFS({ hello: 'world' }, {
+  filename: 'hello.json',
+  metadata: { name: 'Smart Upload Test', keyvalues: { env: 'dev' } },
 });
 
-// Automatically handles errors and provides simulation fallback
+// Automatically handles server errors and provides clear messages
 ```
 
-## 🧪 Testing
-
-### Run Quick Test
-
+## Testing
 ```typescript
 import { runQuickTest } from './utils/ipfsTest';
-
-// Run basic functionality test
 await runQuickTest();
 ```
 
-### Run Full Test Suite
-
 ```typescript
 import { IPFSTestSuite } from './utils/ipfsTest';
-
-// Run comprehensive tests
-const testSuite = new IPFSTestSuite();
-await testSuite.runAllTests();
+const suite = new IPFSTestSuite();
+await suite.runAllTests();
 ```
 
-### Test Coverage
-
-The test suite covers:
-- Configuration validation
-- File upload functionality
-- Dataset upload
-- CID validation and verification
-- Groups management
-- Metadata and keyvalues
-- Error handling and edge cases
-
-## 🔒 Security Features
+## Security
 
 ### Rate Limiting
-- Configurable API call limits
-- Automatic backoff and retry logic
-- User-friendly error messages
+- Client-side limiter: default 10 calls/minute
 
 ### Input Validation
-- Filename sanitization
-- File size validation
-- CID format validation
-- Metadata validation
+- Filename sanitization, file size checks, CID format validation
 
 ### Secure Configuration
-- Environment variable validation
-- JWT token security checks
-- API key management
+- Server-side credentials only; client holds gateway host for reads
 
 ### Error Handling
-- Comprehensive error catching
-- Graceful degradation
-- Detailed error reporting
+- Clear error codes: `RATE_LIMIT_ERROR`, `FILE_SIZE_ERROR`, `SERVER_UPLOAD_ERROR`, `NETWORK_ERROR`
 
-## 🚨 Error Handling
+## Error Handling
 
-### Common Error Types
+1. Configuration
+   - Server credentials missing: configure `PINATA_JWT` or `PINATA_API_KEY` + `PINATA_SECRET_API_KEY` in Netlify
+2. Rate Limiting
+   - Wait for limiter window and retry
+3. File Validation
+   - File too large (client-side approximation)
+   - Invalid filename
+4. Upload Errors
+   - Network issues
+   - Pinata API errors surfaced via server proxy
 
-1. **Configuration Errors**
-   ```typescript
-   // Missing JWT token
-   Error: 'Pinata JWT token not configured'
-   
-   // Invalid JWT format
-   Error: 'Invalid JWT token format'
-   ```
-
-2. **Rate Limiting**
-   ```typescript
-   // Too many requests
-   Error: 'Rate limit exceeded. Please wait X seconds'
-   ```
-
-3. **File Validation**
-   ```typescript
-   // File too large
-   Error: 'File size exceeds maximum limit'
-   
-   // Invalid filename
-   Error: 'Invalid filename format'
-   ```
-
-4. **Upload Errors**
-   ```typescript
-   // Network issues
-   Error: 'Upload failed: Network error'
-   
-   // Pinata API errors
-   Error: 'Pinata API error: [specific error]'
-   ```
-
-### Error Recovery
-
-The system includes automatic error recovery:
-- Retry logic for transient failures
-- Fallback to simulation mode in development
-- Graceful degradation for non-critical features
-
-## 📊 Monitoring and Debugging
+## Monitoring and Debugging
 
 ### Logging
+- Client logs key events and warnings in development. Use browser DevTools.
 
-All functions include comprehensive logging:
-- Success/failure status
-- Performance metrics
-- Error details
-- Debug information
+### Local Functions
+- Use `netlify dev` to run functions locally and inspect logs.
 
-### Debug Mode
+## Migration Guide
 
-Enable detailed logging by setting:
-```typescript
-// In development
-console.log('IPFS Debug mode enabled');
-```
+1. Update imports to `./utils/ipfsUpload` and `./utils/ipfsVerification`.
+2. Use object-based options (`{ filename, metadata, verify }`).
+3. Handle return `{ cid, url, size, verified }`.
 
-## 🔄 Migration Guide
-
-### From Previous Implementation
-
-If upgrading from a previous IPFS implementation:
-
-1. **Update imports**:
-   ```typescript
-   // Old
-   import { uploadToIPFS } from './api/upload';
-   
-   // New
-   import { uploadToIPFS } from './utils/ipfsUpload';
-   ```
-
-2. **Update function signatures**:
-   ```typescript
-   // Old
-   uploadToIPFS(file, filename)
-   
-   // New
-   uploadToIPFS(file, {
-     metadata: { name: filename },
-     verifyAfterUpload: true
-   })
-   ```
-
-3. **Handle new return format**:
-   ```typescript
-   // New return format includes verification status
-   const result = await uploadToIPFS(file, options);
-   if (result.success && result.verified) {
-     // File uploaded and verified
-   }
-   ```
-
-## 🎯 Best Practices
+## Best Practices
 
 ### File Organization
-- Use meaningful metadata names and descriptions
-- Implement consistent keyvalue schemas
-- Organize related files using Groups
+- Use consistent `keyvalues` schemas; avoid exceeding Pinata’s 10-key limit.
 
 ### Performance
-- Enable verification only when necessary
-- Use appropriate file size limits
-- Implement proper error handling
+- Enable integrity verification only when needed.
 
 ### Security
-- Never commit JWT tokens to version control
-- Use environment variables for all secrets
-- Implement proper input validation
+- Keep credentials server-side; do not expose in client env.
 
 ### Testing
-- Run tests before deployment
-- Test with various file types and sizes
-- Verify error handling scenarios
+- Run tests before deployment and validate edge cases.
 
-## 🔗 Resources
+## Resources
+- Pinata Docs: https://docs.pinata.cloud/
+- IPFS Docs: https://docs.ipfs.io/
+- Pinata SDK: https://github.com/PinataCloud/pinata-web3
 
-- [Pinata Documentation](https://docs.pinata.cloud/)
-- [IPFS Documentation](https://docs.ipfs.io/)
-- [Pinata SDK GitHub](https://github.com/PinataCloud/pinata-web3)
-
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
-
-1. **"Pinata JWT token not configured"**
-   - Check `.env` file exists and contains `VITE_PINATA_JWT`
-   - Verify JWT token is valid and not expired
-
-2. **"Rate limit exceeded"**
+1. "Pinata server credentials not configured"
+   - Configure `PINATA_JWT` or `PINATA_API_KEY` + `PINATA_SECRET_API_KEY` in Netlify
+2. "Rate limit exceeded"
    - Wait for the specified time before retrying
-   - Consider adjusting rate limit settings
-
-3. **"File size exceeds maximum limit"**
-   - Check file size against `VITE_MAX_FILE_SIZE`
-   - Compress files if necessary
-
-4. **"Invalid CID format"**
+3. "File size exceeds maximum limit"
+   - Reduce JSON payload or adjust server limits
+4. "Invalid CID format"
    - Verify CID string format
-   - Check for extra whitespace or characters
 
-### Getting Help
-
-If you encounter issues:
-1. Check the console for detailed error messages
-2. Run the test suite to identify specific problems
-3. Verify environment configuration
-4. Check Pinata service status
-
-## 📈 Future Enhancements
-
-Potential improvements:
-- Batch upload functionality
-- Advanced metadata querying
-- File deduplication
-- Enhanced caching strategies
-- Real-time upload progress tracking
+## Future Enhancements
+- Batch uploads and progress tracking
+- Advanced metadata search and indexing
+- Caching strategies and client-side persistence
