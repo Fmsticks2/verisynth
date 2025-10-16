@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { useContractRead, usePrepareContractWrite, useContractWrite, useWaitForTransaction, usePublicClient, useWalletClient, useSwitchNetwork, useNetwork } from 'wagmi';
+import { useContractRead, usePrepareContractWrite, useContractWrite, useWaitForTransaction, usePublicClient, useWalletClient, useSwitchNetwork, useNetwork, useAccount } from 'wagmi';
 import { CONTRACT_CONFIG } from '../utils/contractConfig';
 import { MARKETPLACE_CONFIG } from '../utils/marketplaceConfig';
 import { retrieveFileContent } from '../utils/ipfsVerification';
@@ -30,6 +30,7 @@ const Marketplace: React.FC = () => {
   const [verifyStatus, setVerifyStatus] = useState<'idle' | 'valid' | 'invalid' | 'error'>('idle');
   const [listings, setListings] = useState<ListingView[]>([]);
   const { data: walletClient } = useWalletClient();
+  const { address } = useAccount();
   const { switchNetworkAsync } = useSwitchNetwork();
   const { chain } = useNetwork();
   const OG_CHAIN_ID = 16602;
@@ -138,6 +139,7 @@ const Marketplace: React.FC = () => {
         address: MARKETPLACE_CONFIG.address,
         abi: MARKETPLACE_CONFIG.abi,
         functionName: 'createListing',
+        account: address!,
         args: createArgs,
       });
       await publicClient?.waitForTransactionReceipt({ hash: txHash });
@@ -197,6 +199,7 @@ const Marketplace: React.FC = () => {
         address: MARKETPLACE_CONFIG.address,
         abi: MARKETPLACE_CONFIG.abi,
         functionName: 'updateListing',
+        account: address!,
         args: updateArgs,
       });
       await publicClient?.waitForTransactionReceipt({ hash: txHash });
@@ -315,6 +318,7 @@ const Marketplace: React.FC = () => {
         address: MARKETPLACE_CONFIG.address,
         abi: MARKETPLACE_CONFIG.abi,
         functionName: 'buy',
+        account: address!,
         args: [BigInt(id)],
         value: l.priceWei,
       });

@@ -189,6 +189,7 @@ const Governance: React.FC = () => {
         address: GOVERNANCE_CONFIG.address,
         abi: GOVERNANCE_CONFIG.abi,
         functionName: 'createProposal',
+        account: address!,
         args: [title, description, payloadUrl],
       });
       await publicClient?.waitForTransactionReceipt({ hash: txHash });
@@ -305,6 +306,7 @@ const Governance: React.FC = () => {
         address: GOVERNANCE_CONFIG.address,
         abi: GOVERNANCE_CONFIG.abi,
         functionName: 'vote',
+        account: address!,
         args: [BigInt(target), voteSupport],
       });
       await publicClient?.waitForTransactionReceipt({ hash: txHash });
