@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { useContractWrite, usePrepareContractWrite, useWaitForTransaction, useAccount, usePublicClient } from 'wagmi';
+import { useContractWrite, usePrepareContractWrite, useAccount, usePublicClient } from 'wagmi';
 import { generateSyntheticData } from '../utils/dataGenerator';
 import { uploadDatasetToIPFS } from '../utils/ipfsUpload';
 import { getOgEntropy } from '../utils/ogCompute';
@@ -55,10 +55,7 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
   });
 
   const { data, write, isError: isWriteError, error: writeError } = useContractWrite(config);
-
-  const { isLoading: isTransactionLoading, isSuccess, isError: isTxError, error: txError } = useWaitForTransaction({
-    hash: data?.hash,
-  });
+  const [isRegistering, setIsRegistering] = useState(false);
 
   // Track if we've already initiated the transaction
   const [hasInitiatedTransaction, setHasInitiatedTransaction] = useState(false);
@@ -263,57 +260,80 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
   React.useEffect(() => {
     if (generatedDataset && uploadedCID && isConnected && write && !hasInitiatedTransaction) {
       setHasInitiatedTransaction(true);
+      setIsRegistering(true);
       write();
     }
   }, [generatedDataset, uploadedCID, isConnected, write, hasInitiatedTransaction]);
 
   // Handle transaction success
+  // When tx hash is available, manually wait for receipt with generous timeout/polling.
   React.useEffect(() => {
-    if (isSuccess && data?.hash) {
-      setIsUploading(false);
-      
-      // Update the generated dataset with actual blockchain values
-      if (generatedDataset) {
-        const updatedDataset = {
-          ...generatedDataset,
-          metadata: {
-            ...generatedDataset.metadata,
-            actualCID: uploadedCID,
-            transactionHash: data.hash,
-            blockchainTimestamp: Date.now(),
-          }
-        };
-        setGeneratedDataset(updatedDataset);
-        onDatasetGenerated?.(updatedDataset);
-      }
-      
-      setModalContent({
-        type: 'success',
-        title: 'Dataset Registered',
-        message: `Dataset successfully registered on-chain! Transaction: ${data.hash.slice(0, 12)}...`,
-      });
-      setShowModal(true);
-      
-      // Reset form after a delay to allow user to see the updated values
-      setTimeout(() => {
-        setGeneratedDataset(null);
-        setUploadedCID('');
-        setHasInitiatedTransaction(false); // Reset transaction flag
-        setFormData({
-          modelVersion: 'v1.0.0',
-          seed: '',
-          topic: '',
-          recordCount: 100,
+    const run = async () => {
+      if (!data?.hash || !publicClient) return;
+      try {
+        // Switch UI from uploading to registering on broadcast
+        setIsUploading(false);
+        setIsRegistering(true);
+        await (publicClient as any).waitForTransactionReceipt({
+          hash: data.hash,
+          confirmations: 1,
+          timeout: 180000, // 3 minutes
+          pollingInterval: 5000,
         });
-      }, 3000);
-    }
-  }, [isSuccess, data?.hash, generatedDataset, uploadedCID, onDatasetGenerated]);
+        // Success: update dataset and notify
+        setIsRegistering(false);
+        if (generatedDataset) {
+          const updatedDataset = {
+            ...generatedDataset,
+            metadata: {
+              ...generatedDataset.metadata,
+              actualCID: uploadedCID,
+              transactionHash: data.hash,
+              blockchainTimestamp: Date.now(),
+            }
+          };
+          setGeneratedDataset(updatedDataset);
+          onDatasetGenerated?.(updatedDataset);
+        }
+        setModalContent({
+          type: 'success',
+          title: 'Dataset Registered',
+          message: `Dataset successfully registered on-chain! Transaction: ${data.hash.slice(0, 12)}...`,
+        });
+        setShowModal(true);
+        setTimeout(() => {
+          setGeneratedDataset(null);
+          setUploadedCID('');
+          setHasInitiatedTransaction(false);
+          setFormData({
+            modelVersion: 'v1.0.0',
+            seed: '',
+            topic: '',
+            recordCount: 100,
+          });
+        }, 3000);
+      } catch (err: any) {
+        // Handle 0G RPC peculiar "no matching receipts found" as pending state
+        const msg = String(err?.message || '');
+        setIsRegistering(false);
+        setModalContent({
+          type: 'info',
+          title: 'Receipt Pending on 0G Testnet',
+          message: msg.includes('no matching receipts found')
+            ? 'Transaction broadcasted, but receipt is not yet indexed by 0G RPC. Your wallet shows it because it is pending. We will keep waiting — try again shortly or view on explorer.'
+            : (err?.message || 'Transaction status could not be confirmed. Please try again.'),
+        });
+        setShowModal(true);
+      }
+    };
+    run();
+  }, [data?.hash, publicClient]);
 
   // Handle transaction broadcast (hash available) to ensure spinners reflect register vs upload
   React.useEffect(() => {
     if (data?.hash && isUploading) {
-      // Switch spinner state from uploading to registering
       setIsUploading(false);
+      setIsRegistering(true);
     }
   }, [data?.hash, isUploading]);
 
@@ -321,6 +341,7 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
   React.useEffect(() => {
     if (isWriteError && writeError) {
       setIsUploading(false);
+      setIsRegistering(false);
       setHasInitiatedTransaction(false);
       setModalContent({
         type: 'error',
@@ -330,20 +351,6 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
       setShowModal(true);
     }
   }, [isWriteError, writeError]);
-
-  // Handle on-chain failure (revert or network issue)
-  React.useEffect(() => {
-    if (isTxError && txError) {
-      setIsUploading(false);
-      setHasInitiatedTransaction(false);
-      setModalContent({
-        type: 'error',
-        title: 'Registration Failed',
-        message: txError?.message || 'Transaction failed or reverted. Please check your wallet or try again.',
-      });
-      setShowModal(true);
-    }
-  }, [isTxError, txError]);
 
   return (
     <div className="space-y-6">
@@ -648,10 +655,10 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
             </button>
             <button
               onClick={handleUploadAndRegister}
-              disabled={!isConnected || isUploading || isTransactionLoading || ((generatedDataset.metadata.topicCompliance?.score ?? 0) < 80)}
+              disabled={!isConnected || isUploading || isRegistering || ((generatedDataset.metadata.topicCompliance?.score ?? 0) < 80)}
               className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isUploading || isTransactionLoading ? (
+              {isUploading || isRegistering ? (
                 <>
                   <Icon icon="ph:spinner" className="w-5 h-5 mr-2 animate-spin" />
                   {isUploading ? 'Uploading...' : 'Registering...'}
