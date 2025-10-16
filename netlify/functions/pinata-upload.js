@@ -40,6 +40,8 @@ exports.handler = async (event) => {
 
     const body = JSON.parse(event.body || '{}');
     const { data, fileBase64, filename, metadata, groupId } = body;
+    // Track JSON payload for potential retry on metadata keyvalues error
+    let pinPayload = null;
 
     // Build pinJSONToIPFS payload
     // Enforce max 10 keyvalues per Pinata constraints
@@ -95,7 +97,7 @@ exports.handler = async (event) => {
       });
     } else if (data) {
       // pinJSONToIPFS path for JSON objects
-      const pinPayload = {
+      pinPayload = {
         pinataContent: data,
         pinataMetadata: {
           name: (metadata && metadata.name) || filename || 'dataset.json',
@@ -119,7 +121,7 @@ exports.handler = async (event) => {
     if (!resp.ok) {
       // Auto-retry with empty keyvalues if Pinata complains about metadata limit
       const isMetaLimitError = /maximum of 10 key values/i.test(text);
-      if (isMetaLimitError) {
+      if (isMetaLimitError && pinPayload) {
         const retryPayload = {
           ...pinPayload,
           pinataMetadata: {
@@ -130,7 +132,7 @@ exports.handler = async (event) => {
 
         const retryResp = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
           method: 'POST',
-          headers,
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify(retryPayload),
         });
         const retryText = await retryResp.text();
