@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { useContractRead, usePrepareContractWrite, useContractWrite, useWaitForTransaction, usePublicClient, useWalletClient } from 'wagmi';
+import { useContractRead, usePrepareContractWrite, useContractWrite, useWaitForTransaction, usePublicClient, useWalletClient, useSwitchNetwork, useNetwork } from 'wagmi';
 import { CONTRACT_CONFIG } from '../utils/contractConfig';
 import { MARKETPLACE_CONFIG } from '../utils/marketplaceConfig';
 import { retrieveFileContent } from '../utils/ipfsVerification';
@@ -30,6 +30,16 @@ const Marketplace: React.FC = () => {
   const [verifyStatus, setVerifyStatus] = useState<'idle' | 'valid' | 'invalid' | 'error'>('idle');
   const [listings, setListings] = useState<ListingView[]>([]);
   const { data: walletClient } = useWalletClient();
+  const { switchNetworkAsync } = useSwitchNetwork();
+  const { chain } = useNetwork();
+  const OG_CHAIN_ID = 16602;
+  const ensureOgChain = async () => {
+    try {
+      if (chain?.id !== OG_CHAIN_ID && switchNetworkAsync) {
+        await switchNetworkAsync(OG_CHAIN_ID);
+      }
+    } catch (_) {}
+  };
 
   // Read total datasets
   const { data: totalDatasets } = useContractRead({
@@ -108,13 +118,47 @@ const Marketplace: React.FC = () => {
     args: createArgs,
     enabled: Boolean(createArgs),
   });
-  const { data: createData, write: createWrite } = useContractWrite(createConfig);
+  const { data: createData } = useContractWrite(createConfig);
   const { isSuccess: createOk } = useWaitForTransaction({ hash: createData?.hash });
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   useEffect(() => {
     if (createOk) {
       setCreateId(''); setCreatePriceEth(''); setCreateLicenseCid('');
     }
   }, [createOk]);
+
+  const handleCreateListing = async () => {
+    setCreateError(null);
+    if (!walletClient || !createArgs) { setCreateError('Connect wallet and fill all fields.'); return; }
+    setCreateBusy(true);
+    try {
+      await ensureOgChain();
+      const txHash = await walletClient.writeContract({
+        address: MARKETPLACE_CONFIG.address,
+        abi: MARKETPLACE_CONFIG.abi,
+        functionName: 'createListing',
+        args: createArgs,
+      });
+      await publicClient?.waitForTransactionReceipt({ hash: txHash });
+      setCreateId(''); setCreatePriceEth(''); setCreateLicenseCid('');
+      // refresh listing for created id
+      const id = Number(createArgs[0]);
+      try {
+        const listing: any = await publicClient?.readContract({
+          address: MARKETPLACE_CONFIG.address,
+          abi: MARKETPLACE_CONFIG.abi,
+          functionName: 'getListing',
+          args: [BigInt(id)],
+        });
+        setListings((prev) => prev.map((l) => l.datasetId === id ? { ...l, priceWei: listing?.price, licenseCid: listing?.licenseCid, active: listing?.active } : l));
+      } catch (_) {}
+    } catch (err: any) {
+      setCreateError(err?.shortMessage || err?.message || 'Failed to create listing');
+    } finally {
+      setCreateBusy(false);
+    }
+  };
 
   // Update listing
   const [updateId, setUpdateId] = useState<number | ''>('');
@@ -130,8 +174,10 @@ const Marketplace: React.FC = () => {
     args: updateArgs,
     enabled: Boolean(updateArgs),
   });
-  const { data: updateData, write: updateWrite } = useContractWrite(updateConfig);
+  const { data: updateData } = useContractWrite(updateConfig);
   const { isSuccess: updateOk } = useWaitForTransaction({ hash: updateData?.hash });
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   useEffect(() => {
     if (updateOk) {
       setUpdateId('');
@@ -140,6 +186,37 @@ const Marketplace: React.FC = () => {
       setUpdateActive(true);
     }
   }, [updateOk]);
+
+  const handleUpdateListing = async () => {
+    setUpdateError(null);
+    if (!walletClient || !updateArgs) { setUpdateError('Connect wallet and fill all fields.'); return; }
+    setUpdateBusy(true);
+    try {
+      await ensureOgChain();
+      const txHash = await walletClient.writeContract({
+        address: MARKETPLACE_CONFIG.address,
+        abi: MARKETPLACE_CONFIG.abi,
+        functionName: 'updateListing',
+        args: updateArgs,
+      });
+      await publicClient?.waitForTransactionReceipt({ hash: txHash });
+      const id = Number(updateArgs[0]);
+      try {
+        const listing: any = await publicClient?.readContract({
+          address: MARKETPLACE_CONFIG.address,
+          abi: MARKETPLACE_CONFIG.abi,
+          functionName: 'getListing',
+          args: [BigInt(id)],
+        });
+        setListings((prev) => prev.map((l) => l.datasetId === id ? { ...l, priceWei: listing?.price, licenseCid: listing?.licenseCid, active: listing?.active } : l));
+      } catch (_) {}
+      setUpdateId(''); setUpdatePriceEth(''); setUpdateLicenseCid(''); setUpdateActive(true);
+    } catch (err: any) {
+      setUpdateError(err?.shortMessage || err?.message || 'Failed to update listing');
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
 
   // Buyer: purchase listing
   const selectedListing = listings.find((l) => l.datasetId === selectedId);
@@ -151,8 +228,10 @@ const Marketplace: React.FC = () => {
     value: selectedListing?.priceWei,
     enabled: Boolean(selectedId && selectedListing?.priceWei),
   });
-  const { data: buyData, write: buyWrite } = useContractWrite(buyConfig);
+  const { data: buyData } = useContractWrite(buyConfig);
   const { isSuccess: buyOk } = useWaitForTransaction({ hash: buyData?.hash });
+  const [buyBusy, setBuyBusy] = useState(false);
+  const [buyError, setBuyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (buyOk) {
@@ -227,17 +306,25 @@ const Marketplace: React.FC = () => {
 
   const handleBuyNow = async (id: number) => {
     const l = listings.find((x) => x.datasetId === id);
-    if (!walletClient || !l?.priceWei) return;
+    setBuyError(null);
+    if (!walletClient || !l?.priceWei) { setBuyError('Connect wallet and select a priced listing.'); return; }
     try {
-      await walletClient.writeContract({
+      setBuyBusy(true);
+      await ensureOgChain();
+      const txHash = await walletClient.writeContract({
         address: MARKETPLACE_CONFIG.address,
-        abi: MARKETPLACE_CONFIG.abi as any,
+        abi: MARKETPLACE_CONFIG.abi,
         functionName: 'buy',
         args: [BigInt(id)],
         value: l.priceWei,
       });
+      await publicClient?.waitForTransactionReceipt({ hash: txHash });
+      setListings((prev) => prev.map((x) => x.datasetId === id ? { ...x, purchaseCount: (x.purchaseCount || 0) + 1 } : x));
     } catch (err) {
       console.error('Buy failed:', err);
+      setBuyError((err as any)?.shortMessage || (err as any)?.message || 'Purchase failed');
+    } finally {
+      setBuyBusy(false);
     }
   };
 
@@ -320,8 +407,9 @@ const Marketplace: React.FC = () => {
               <label className="block text-xs font-medium text-gray-700 mt-2">License CID (IPFS)</label>
               <input className="input-field" placeholder="e.g., Qm..." value={createLicenseCid} onChange={(e) => setCreateLicenseCid(e.target.value)} />
               <div className="flex justify-end">
-                <button className="btn-primary" onClick={() => createWrite?.()} disabled={!createWrite}><Icon icon="ph:tag" className="w-5 h-5 mr-2" />Create Listing</button>
+                <button className="btn-primary" onClick={handleCreateListing} disabled={createBusy}><Icon icon="ph:tag" className="w-5 h-5 mr-2" />{createBusy ? 'Creating...' : 'Create Listing'}</button>
               </div>
+              {createError && <p className="text-xs text-red-600 mt-1">{createError}</p>}
             </div>
             <div className="mt-4 space-y-2 border-t pt-3">
               <label className="block text-xs font-medium text-gray-700">Update ID</label>
@@ -332,8 +420,9 @@ const Marketplace: React.FC = () => {
               <input className="input-field" placeholder="e.g., Qm..." value={updateLicenseCid} onChange={(e) => setUpdateLicenseCid(e.target.value)} />
               <label className="flex items-center space-x-2 text-sm"><input type="checkbox" checked={updateActive} onChange={(e) => setUpdateActive(e.target.checked)} /><span>Active</span></label>
               <div className="flex justify-end">
-                <button className="btn-secondary" onClick={() => updateWrite?.()} disabled={!updateWrite}><Icon icon="ph:gear" className="w-5 h-5 mr-2" />Update Listing</button>
+                <button className="btn-secondary" onClick={handleUpdateListing} disabled={updateBusy}><Icon icon="ph:gear" className="w-5 h-5 mr-2" />{updateBusy ? 'Updating...' : 'Update Listing'}</button>
               </div>
+              {updateError && <p className="text-xs text-red-600 mt-1">{updateError}</p>}
             </div>
           </div>
           <div className="p-4 bg-gray-50 rounded-xl">
@@ -351,8 +440,9 @@ const Marketplace: React.FC = () => {
                   <button className="btn-secondary" onClick={() => selectedId && handlePreview(selectedId)} disabled={!selectedId}><Icon icon="ph:eye" className="w-5 h-5 mr-2" />Preview</button>
                   <button className="btn-secondary" onClick={handleVerify} disabled={!selectedId}><Icon icon="ph:shield-check" className="w-5 h-5 mr-2" />Verify</button>
                 </div>
-                <button className="btn-primary" onClick={() => buyWrite?.()} disabled={!buyWrite}><Icon icon="ph:shopping-cart" className="w-5 h-5 mr-2" />Purchase</button>
+                <button className="btn-primary" onClick={() => selectedId && handleBuyNow(selectedId)} disabled={buyBusy || !selectedId}><Icon icon="ph:shopping-cart" className="w-5 h-5 mr-2" />{buyBusy ? 'Purchasing...' : 'Purchase'}</button>
               </div>
+              {buyError && <p className="text-xs text-red-600 mt-1">{buyError}</p>}
               {verifyStatus !== 'idle' && (
                 <p className={`text-xs ${verifyStatus === 'valid' ? 'text-green-600' : verifyStatus === 'invalid' ? 'text-red-600' : 'text-gray-600'}`}>Verification: {verifyStatus}</p>
               )}

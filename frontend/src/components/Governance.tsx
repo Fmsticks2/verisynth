@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { usePrepareContractWrite, useContractWrite, useWaitForTransaction, useContractRead, usePublicClient } from 'wagmi';
+import { usePrepareContractWrite, useContractWrite, useWaitForTransaction, useContractRead, usePublicClient, useWalletClient, useSwitchNetwork, useNetwork } from 'wagmi';
 import { GOVERNANCE_CONFIG } from '../utils/governanceConfig';
 
 const Governance: React.FC = () => {
@@ -11,6 +11,17 @@ const Governance: React.FC = () => {
   const [url, setUrl] = useState('');
   const [selectedProposalId, setSelectedProposalId] = useState<number | null>(null);
   const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
+  const { switchNetworkAsync } = useSwitchNetwork();
+  const { chain } = useNetwork();
+  const OG_CHAIN_ID = 16602;
+  const ensureOgChain = async () => {
+    try {
+      if (chain?.id !== OG_CHAIN_ID && switchNetworkAsync) {
+        await switchNetworkAsync(OG_CHAIN_ID);
+      }
+    } catch (_) {}
+  };
 
   // Deep link: read ?proposalId
   useEffect(() => {
@@ -59,8 +70,10 @@ const Governance: React.FC = () => {
     args: canCreate ? [title, description, url] : undefined,
     enabled: canCreate,
   });
-  const { data: createData, write: createWrite } = useContractWrite(createConfig);
+  const { data: createData } = useContractWrite(createConfig);
   const { isSuccess: createSuccess } = useWaitForTransaction({ hash: createData?.hash });
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (createSuccess) {
@@ -95,6 +108,47 @@ const Governance: React.FC = () => {
     }
   }, [createSuccess]);
 
+  const handleSubmitProposal = async () => {
+    setCreateError(null);
+    if (!walletClient || !canCreate) { setCreateError('Connect wallet and fill in the title.'); return; }
+    setCreateBusy(true);
+    try {
+      await ensureOgChain();
+      const txHash = await walletClient.writeContract({
+        address: GOVERNANCE_CONFIG.address,
+        abi: GOVERNANCE_CONFIG.abi,
+        functionName: 'createProposal',
+        args: [title, description, url],
+      });
+      await publicClient?.waitForTransactionReceipt({ hash: txHash });
+      setTitle(''); setDescription(''); setUrl('');
+      // refresh proposals
+      const count = Number(await publicClient?.readContract({
+        address: GOVERNANCE_CONFIG.address,
+        abi: GOVERNANCE_CONFIG.abi,
+        functionName: 'getProposalCount',
+        args: [],
+      }) || 0);
+      const arr: any[] = [];
+      for (let i = 1; i <= count; i++) {
+        try {
+          const resp = await publicClient?.readContract({
+            address: GOVERNANCE_CONFIG.address,
+            abi: GOVERNANCE_CONFIG.abi,
+            functionName: 'getProposal',
+            args: [BigInt(i)],
+          });
+          if (resp) arr.push(resp);
+        } catch {}
+      }
+      setProposals(arr);
+    } catch (err: any) {
+      setCreateError(err?.shortMessage || err?.message || 'Failed to submit proposal');
+    } finally {
+      setCreateBusy(false);
+    }
+  };
+
   // Voting
   const [voteTargetId, setVoteTargetId] = useState<number | null>(null);
   const [voteSupport, setVoteSupport] = useState<boolean>(true);
@@ -105,8 +159,10 @@ const Governance: React.FC = () => {
     args: voteTargetId ? [BigInt(voteTargetId), voteSupport] : undefined,
     enabled: Boolean(voteTargetId !== null),
   });
-  const { data: voteData, write: voteWrite } = useContractWrite(voteConfig);
+  const { data: voteData } = useContractWrite(voteConfig);
   const { isSuccess: voteSuccess } = useWaitForTransaction({ hash: voteData?.hash });
+  const [voteBusy, setVoteBusy] = useState(false);
+  const [voteError, setVoteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (voteSuccess) {
@@ -138,6 +194,48 @@ const Governance: React.FC = () => {
       })();
     }
   }, [voteSuccess]);
+
+  const handleCastVote = async () => {
+    setVoteError(null);
+    const target = voteTargetId ?? selectedProposalId;
+    if (!walletClient || !target) { setVoteError('Connect wallet and select a proposal.'); return; }
+    setVoteBusy(true);
+    try {
+      await ensureOgChain();
+      const txHash = await walletClient.writeContract({
+        address: GOVERNANCE_CONFIG.address,
+        abi: GOVERNANCE_CONFIG.abi,
+        functionName: 'vote',
+        args: [BigInt(target), voteSupport],
+      });
+      await publicClient?.waitForTransactionReceipt({ hash: txHash });
+      setVoteTargetId(null);
+      // refresh proposals
+      const count = Number(await publicClient?.readContract({
+        address: GOVERNANCE_CONFIG.address,
+        abi: GOVERNANCE_CONFIG.abi,
+        functionName: 'getProposalCount',
+        args: [],
+      }) || 0);
+      const arr: any[] = [];
+      for (let i = 1; i <= count; i++) {
+        try {
+          const resp = await publicClient?.readContract({
+            address: GOVERNANCE_CONFIG.address,
+            abi: GOVERNANCE_CONFIG.abi,
+            functionName: 'getProposal',
+            args: [BigInt(i)],
+          });
+          if (resp) arr.push(resp);
+        } catch {}
+      }
+      setProposals(arr);
+    } catch (err: any) {
+      setVoteError(err?.shortMessage || err?.message || 'Failed to cast vote');
+    } finally {
+      setVoteBusy(false);
+    }
+  };
 
   const handleShareLink = (id: number) => {
     const base = window.location.origin + window.location.pathname;
@@ -222,11 +320,12 @@ const Governance: React.FC = () => {
                 onChange={(e) => setUrl(e.target.value)}
               />
               <div className="flex justify-end">
-                <button className="btn-primary" onClick={() => createWrite?.()} disabled={!canCreate || !createWrite}>
+                <button className="btn-primary" onClick={handleSubmitProposal} disabled={createBusy || !canCreate}>
                   <Icon icon="ph:plus-circle" className="w-5 h-5 mr-2" />
-                  Submit Proposal
+                  {createBusy ? 'Submitting...' : 'Submit Proposal'}
                 </button>
               </div>
+              {createError && <p className="text-xs text-red-600 mt-1">{createError}</p>}
             </div>
           </div>
           <div className="p-4 bg-gray-50 rounded-xl">
@@ -254,11 +353,12 @@ const Governance: React.FC = () => {
               </div>
             </div>
             <div className="flex justify-end mt-3">
-              <button className="btn-primary" onClick={() => voteWrite?.()} disabled={!voteWrite}>
+              <button className="btn-primary" onClick={handleCastVote} disabled={voteBusy}>
                 <Icon icon="ph:checks" className="w-5 h-5 mr-2" />
-                Vote
+                {voteBusy ? 'Voting...' : 'Vote'}
               </button>
             </div>
+            {voteError && <p className="text-xs text-red-600 mt-1">{voteError}</p>}
           </div>
         </div>
       </motion.div>
