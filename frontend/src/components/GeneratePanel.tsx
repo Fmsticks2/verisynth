@@ -54,9 +54,9 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
     enabled: Boolean(generatedDataset && uploadedCID && isConnected),
   });
 
-  const { data, write } = useContractWrite(config);
+  const { data, write, isError: isWriteError, error: writeError } = useContractWrite(config);
 
-  const { isLoading: isTransactionLoading, isSuccess } = useWaitForTransaction({
+  const { isLoading: isTransactionLoading, isSuccess, isError: isTxError, error: txError } = useWaitForTransaction({
     hash: data?.hash,
   });
 
@@ -308,6 +308,42 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
       }, 3000);
     }
   }, [isSuccess, data?.hash, generatedDataset, uploadedCID, onDatasetGenerated]);
+
+  // Handle transaction broadcast (hash available) to ensure spinners reflect register vs upload
+  React.useEffect(() => {
+    if (data?.hash && isUploading) {
+      // Switch spinner state from uploading to registering
+      setIsUploading(false);
+    }
+  }, [data?.hash, isUploading]);
+
+  // Handle immediate signing errors (user rejects or wallet error)
+  React.useEffect(() => {
+    if (isWriteError && writeError) {
+      setIsUploading(false);
+      setHasInitiatedTransaction(false);
+      setModalContent({
+        type: 'error',
+        title: 'Transaction Error',
+        message: writeError?.message || 'Transaction signing failed or was rejected.',
+      });
+      setShowModal(true);
+    }
+  }, [isWriteError, writeError]);
+
+  // Handle on-chain failure (revert or network issue)
+  React.useEffect(() => {
+    if (isTxError && txError) {
+      setIsUploading(false);
+      setHasInitiatedTransaction(false);
+      setModalContent({
+        type: 'error',
+        title: 'Registration Failed',
+        message: txError?.message || 'Transaction failed or reverted. Please check your wallet or try again.',
+      });
+      setShowModal(true);
+    }
+  }, [isTxError, txError]);
 
   return (
     <div className="space-y-6">
