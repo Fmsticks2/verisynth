@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_DATASET_REGISTRY_ADDRESS_SEPOLIA: string
   readonly VITE_DATASET_REGISTRY_ADDRESS_MUMBAI: string
   readonly VITE_DATASET_REGISTRY_ADDRESS_OG: string
+  readonly VITE_GOVERNANCE_ADDRESS_OG: string
+  readonly VITE_DATASET_MARKETPLACE_ADDRESS_OG: string
 
   // 0G Network Configuration
   readonly VITE_OG_RPC_URL: string
