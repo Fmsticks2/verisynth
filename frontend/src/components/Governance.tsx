@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { useContractRead, usePublicClient, useWalletClient, useSwitchNetwork, useNetwork } from 'wagmi';
+import { useContractRead, usePublicClient, useWalletClient, useSwitchNetwork, useNetwork, useAccount } from 'wagmi';
 import { GOVERNANCE_CONFIG } from '../utils/governanceConfig';
 
 const Governance: React.FC = () => {
@@ -15,6 +15,7 @@ const Governance: React.FC = () => {
   const { data: walletClient } = useWalletClient();
   const { switchNetworkAsync } = useSwitchNetwork();
   const { chain } = useNetwork();
+  const { address } = useAccount();
   const OG_CHAIN_ID = 16602;
   const ensureOgChain = async () => {
     try {
@@ -165,14 +166,55 @@ const Governance: React.FC = () => {
   const [voteSupport, setVoteSupport] = useState<boolean>(true);
   const [voteBusy, setVoteBusy] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
+  const [alreadyVoted, setAlreadyVoted] = useState<boolean>(false);
+
+  // Check if current wallet has already voted on the selected proposal
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const pid = voteTargetId ?? selectedProposalId;
+        if (!address || !publicClient || !pid) {
+          if (!cancelled) setAlreadyVoted(false);
+          return;
+        }
+        const v = await publicClient.readContract({
+          address: GOVERNANCE_CONFIG.address,
+          abi: GOVERNANCE_CONFIG.abi,
+          functionName: 'hasVoted',
+          args: [BigInt(pid), address],
+        });
+        if (!cancelled) setAlreadyVoted(Boolean(v));
+      } catch {
+        if (!cancelled) setAlreadyVoted(false);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [address, voteTargetId, selectedProposalId, publicClient]);
 
   const handleCastVote = async () => {
     setVoteError(null);
     const target = voteTargetId ?? selectedProposalId;
     if (!walletClient || !target) { setVoteError('Connect wallet and select a proposal.'); return; }
+    // Validate proposal existence and status
+    const targetProposal = proposals.find((p) => Number(p.id) === Number(target));
+    if (!targetProposal) { setVoteError('Invalid proposal ID.'); return; }
+    if (targetProposal.closed) { setVoteError('This proposal is closed. Voting disabled.'); return; }
     setVoteBusy(true);
     try {
       await ensureOgChain();
+      // UI guard: only one vote per wallet
+      const voted = await publicClient?.readContract({
+        address: GOVERNANCE_CONFIG.address,
+        abi: GOVERNANCE_CONFIG.abi,
+        functionName: 'hasVoted',
+        args: [BigInt(target), address!],
+      });
+      if (voted) {
+        setVoteError('You have already voted on this proposal. One vote per wallet.');
+        return;
+      }
       const txHash = await walletClient.writeContract({
         address: GOVERNANCE_CONFIG.address,
         abi: GOVERNANCE_CONFIG.abi,
@@ -226,7 +268,14 @@ const Governance: React.FC = () => {
       }
       setProposals(arr);
     } catch (err: any) {
-      setVoteError(err?.shortMessage || err?.message || 'Failed to cast vote');
+      const msg = err?.shortMessage || err?.message || '';
+      if (msg && /Missing or invalid parameters/i.test(msg)) {
+        setVoteError('Missing or invalid parameters. Verify proposal ID and vote eligibility.');
+      } else if (msg) {
+        setVoteError(msg);
+      } else {
+        setVoteError('Failed to cast vote');
+      }
     } finally {
       setVoteBusy(false);
     }
@@ -326,6 +375,7 @@ const Governance: React.FC = () => {
           <div className="p-4 bg-gray-50 rounded-xl" ref={voteSectionRef}>
             <h3 className="font-semibold text-gray-900 mb-2">Voting</h3>
             <p className="text-sm text-gray-600">Pick a proposal and cast your vote.</p>
+            <p className="text-xs text-gray-500 mt-1">You can only vote once per proposal.</p>
             <div className="flex items-center space-x-2 mt-3">
               <div className="flex-1">
                 <label className="block text-xs font-medium text-gray-700">Proposal ID</label>
@@ -348,11 +398,12 @@ const Governance: React.FC = () => {
               </div>
             </div>
             <div className="flex justify-end mt-3">
-              <button className="btn-primary" onClick={handleCastVote} disabled={voteBusy}>
+              <button className="btn-primary" onClick={handleCastVote} disabled={voteBusy || alreadyVoted}>
                 <Icon icon="ph:checks" className="w-5 h-5 mr-2" />
                 {voteBusy ? 'Voting...' : 'Vote'}
               </button>
             </div>
+            {alreadyVoted && <p className="text-xs text-orange-600 mt-1">You have already voted on this proposal.</p>}
             {voteError && <p className="text-xs text-red-600 mt-1">{voteError}</p>}
           </div>
         </div>
