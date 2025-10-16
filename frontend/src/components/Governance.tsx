@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { usePrepareContractWrite, useContractWrite, useWaitForTransaction, useContractRead } from 'wagmi';
+import { usePrepareContractWrite, useContractWrite, useWaitForTransaction, useContractRead, usePublicClient } from 'wagmi';
 import { GOVERNANCE_CONFIG } from '../utils/governanceConfig';
 
 const Governance: React.FC = () => {
@@ -10,6 +10,7 @@ const Governance: React.FC = () => {
   const [description, setDescription] = useState('');
   const [url, setUrl] = useState('');
   const [selectedProposalId, setSelectedProposalId] = useState<number | null>(null);
+  const publicClient = usePublicClient();
 
   // Deep link: read ?proposalId
   useEffect(() => {
@@ -33,9 +34,9 @@ const Governance: React.FC = () => {
       const arr: any[] = [];
       for (let i = 1; i <= count; i++) {
         try {
-          const resp = await (window as any).viemPublicClient?.readContract?.({
+          const resp = await publicClient?.readContract({
             address: GOVERNANCE_CONFIG.address,
-            abi: GOVERNANCE_CONFIG.abi,
+            abi: GOVERNANCE_CONFIG.abi as any,
             functionName: 'getProposal',
             args: [BigInt(i)],
           });
@@ -47,7 +48,7 @@ const Governance: React.FC = () => {
       setProposals(arr);
     }
     loadProposals();
-  }, [proposalCountData]);
+  }, [proposalCountData, publicClient]);
 
   // Prepare createProposal
   const canCreate = title.trim().length > 0;
@@ -67,6 +68,30 @@ const Governance: React.FC = () => {
       setDescription('');
       setUrl('');
       refetchCount?.();
+      // reload proposals after creation
+      (async () => {
+        try {
+          const count = Number(await publicClient?.readContract({
+            address: GOVERNANCE_CONFIG.address,
+            abi: GOVERNANCE_CONFIG.abi as any,
+            functionName: 'getProposalCount',
+            args: [],
+          }) || 0);
+          const arr: any[] = [];
+          for (let i = 1; i <= count; i++) {
+            try {
+              const resp = await publicClient?.readContract({
+                address: GOVERNANCE_CONFIG.address,
+                abi: GOVERNANCE_CONFIG.abi as any,
+                functionName: 'getProposal',
+                args: [BigInt(i)],
+              });
+              if (resp) arr.push(resp);
+            } catch {}
+          }
+          setProposals(arr);
+        } catch {}
+      })();
     }
   }, [createSuccess]);
 
@@ -87,6 +112,30 @@ const Governance: React.FC = () => {
     if (voteSuccess) {
       setVoteTargetId(null);
       refetchCount?.();
+      // reload proposals to reflect updated vote counts
+      (async () => {
+        try {
+          const count = Number(await publicClient?.readContract({
+            address: GOVERNANCE_CONFIG.address,
+            abi: GOVERNANCE_CONFIG.abi as any,
+            functionName: 'getProposalCount',
+            args: [],
+          }) || 0);
+          const arr: any[] = [];
+          for (let i = 1; i <= count; i++) {
+            try {
+              const resp = await publicClient?.readContract({
+                address: GOVERNANCE_CONFIG.address,
+                abi: GOVERNANCE_CONFIG.abi as any,
+                functionName: 'getProposal',
+                args: [BigInt(i)],
+              });
+              if (resp) arr.push(resp);
+            } catch {}
+          }
+          setProposals(arr);
+        } catch {}
+      })();
     }
   }, [voteSuccess]);
 
@@ -190,7 +239,10 @@ const Governance: React.FC = () => {
                   className="input-field"
                   placeholder="e.g., 3"
                   value={voteTargetId || selectedProposalId || ''}
-                  onChange={(e) => setVoteTargetId(parseInt(e.target.value))}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value);
+                    setVoteTargetId(Number.isFinite(v) ? v : null);
+                  }}
                 />
               </div>
               <div className="w-40">

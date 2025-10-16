@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
-import { useContractRead, usePrepareContractWrite, useContractWrite, useWaitForTransaction } from 'wagmi';
+import { useContractRead, usePrepareContractWrite, useContractWrite, useWaitForTransaction, usePublicClient, useWalletClient } from 'wagmi';
 import { CONTRACT_CONFIG } from '../utils/contractConfig';
 import { MARKETPLACE_CONFIG } from '../utils/marketplaceConfig';
 import { retrieveFileContent } from '../utils/ipfsVerification';
@@ -22,12 +22,14 @@ type ListingView = {
 
 const Marketplace: React.FC = () => {
   // Removed unused account destructuring to satisfy TS and keep UI clean
+  const publicClient = usePublicClient();
   const [topicFilter, setTopicFilter] = useState('');
   const [sortBy, setSortBy] = useState<'recent' | 'price' | 'popularity'>('recent');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [preview, setPreview] = useState<any[] | null>(null);
   const [verifyStatus, setVerifyStatus] = useState<'idle' | 'valid' | 'invalid' | 'error'>('idle');
   const [listings, setListings] = useState<ListingView[]>([]);
+  const { data: walletClient } = useWalletClient();
 
   // Read total datasets
   const { data: totalDatasets } = useContractRead({
@@ -43,13 +45,13 @@ const Marketplace: React.FC = () => {
       const arr: ListingView[] = [];
       for (let id = 1; id <= total; id++) {
         try {
-          const dataset: any = await (window as any).viemPublicClient?.readContract?.({
+          const dataset: any = await publicClient?.readContract({
             address: CONTRACT_CONFIG.address,
             abi: CONTRACT_CONFIG.abi,
             functionName: 'getDataset',
             args: [BigInt(id)],
           });
-          const listing: any = await (window as any).viemPublicClient?.readContract?.({
+          const listing: any = await publicClient?.readContract({
             address: MARKETPLACE_CONFIG.address,
             abi: MARKETPLACE_CONFIG.abi,
             functionName: 'getListing',
@@ -76,7 +78,7 @@ const Marketplace: React.FC = () => {
       setListings(arr);
     }
     fetchAll();
-  }, [totalDatasets]);
+  }, [totalDatasets, publicClient]);
 
   const filtered = useMemo(() => {
     let list = listings.filter((l) => !topicFilter || l.modelVersion?.toLowerCase().includes(topicFilter.toLowerCase()));
@@ -97,7 +99,8 @@ const Marketplace: React.FC = () => {
   const [createId, setCreateId] = useState<number | ''>('');
   const [createPriceEth, setCreatePriceEth] = useState<string>('');
   const [createLicenseCid, setCreateLicenseCid] = useState<string>('');
-  const createArgs = createId && createPriceEth && createLicenseCid ? [BigInt(createId), parseEther(createPriceEth), createLicenseCid] as const : undefined;
+  const createPriceWei = createPriceEth ? safeParseEther(createPriceEth) : null;
+  const createArgs = createId && createPriceWei !== null && createLicenseCid ? [BigInt(createId), createPriceWei!, createLicenseCid] as const : undefined;
   const { config: createConfig } = usePrepareContractWrite({
     address: MARKETPLACE_CONFIG.address,
     abi: MARKETPLACE_CONFIG.abi,
@@ -118,7 +121,8 @@ const Marketplace: React.FC = () => {
   const [updatePriceEth, setUpdatePriceEth] = useState<string>('');
   const [updateLicenseCid, setUpdateLicenseCid] = useState<string>('');
   const [updateActive, setUpdateActive] = useState<boolean>(true);
-  const updateArgs = updateId && updatePriceEth && updateLicenseCid ? [BigInt(updateId), parseEther(updatePriceEth), updateLicenseCid, updateActive] as const : undefined;
+  const updatePriceWei = updatePriceEth ? safeParseEther(updatePriceEth) : null;
+  const updateArgs = updateId && updatePriceWei !== null && updateLicenseCid ? [BigInt(updateId), updatePriceWei!, updateLicenseCid, updateActive] as const : undefined;
   const { config: updateConfig } = usePrepareContractWrite({
     address: MARKETPLACE_CONFIG.address,
     abi: MARKETPLACE_CONFIG.abi,
@@ -188,11 +192,52 @@ const Marketplace: React.FC = () => {
     const l = selectedListing;
     if (!l) return;
     try {
-      // Simple compare using stored on-chain hash vs recomputed from preview (best-effort)
-      // If full dataset is too large, skip recompute and just show hash
-      setVerifyStatus(l.dataHash ? 'valid' : 'invalid');
+      if (!l.cid) {
+        setVerifyStatus('error');
+        return;
+      }
+      const content = await retrieveFileContent(l.cid);
+      // Attempt to parse IPFS JSON structure and recompute deterministic hash
+      let parsed: any;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        setVerifyStatus('error');
+        return;
+      }
+      // Prefer computeDataHash if structure includes metadata + data
+      let recomputed = '';
+      try {
+        const { computeDataHash } = await import('../utils/dataGenerator');
+        recomputed = await computeDataHash(parsed);
+      } catch {
+        // Fallback: basic SHA-256 over content
+        const encoder = new TextEncoder();
+        const data = encoder.encode(content);
+        const digest = await crypto.subtle.digest('SHA-256', data);
+        const bytes = new Uint8Array(digest);
+        recomputed = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+      }
+
+      setVerifyStatus(recomputed && l.dataHash && recomputed === l.dataHash ? 'valid' : 'invalid');
     } catch {
       setVerifyStatus('error');
+    }
+  };
+
+  const handleBuyNow = async (id: number) => {
+    const l = listings.find((x) => x.datasetId === id);
+    if (!walletClient || !l?.priceWei) return;
+    try {
+      await walletClient.writeContract({
+        address: MARKETPLACE_CONFIG.address,
+        abi: MARKETPLACE_CONFIG.abi as any,
+        functionName: 'buy',
+        args: [BigInt(id)],
+        value: l.priceWei,
+      });
+    } catch (err) {
+      console.error('Buy failed:', err);
     }
   };
 
@@ -355,7 +400,7 @@ const Marketplace: React.FC = () => {
               <div className="flex items-center justify-end space-x-2 mt-2">
                 <button className="btn-secondary text-xs" onClick={() => handlePreview(l.datasetId)}><Icon icon="ph:eye" className="w-4 h-4 mr-1" /> Preview</button>
                 <button className="btn-secondary text-xs" onClick={() => { setSelectedId(l.datasetId); handleVerify(); }}><Icon icon="ph:shield-check" className="w-4 h-4 mr-1" /> Verify</button>
-                <button className="btn-primary text-xs" onClick={() => { setSelectedId(l.datasetId); buyWrite?.(); }} disabled={!buyWrite}><Icon icon="ph:shopping-cart" className="w-4 h-4 mr-1" /> Purchase</button>
+                <button className="btn-primary text-xs" onClick={() => handleBuyNow(l.datasetId)} disabled={!walletClient || !l.priceWei}><Icon icon="ph:shopping-cart" className="w-4 h-4 mr-1" /> Purchase</button>
               </div>
             </li>
           ))}
@@ -366,3 +411,6 @@ const Marketplace: React.FC = () => {
 };
 
 export default Marketplace;
+function safeParseEther(v: string): bigint | null {
+  try { return parseEther(v as `${number}`); } catch { return null; }
+}
