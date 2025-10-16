@@ -4,11 +4,16 @@ import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
 import { useContractRead, usePublicClient, useWalletClient, useSwitchNetwork, useNetwork, useAccount } from 'wagmi';
 import { GOVERNANCE_CONFIG } from '../utils/governanceConfig';
+import { uploadImageToIPFS } from '../utils/ipfsUpload';
 
 const Governance: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [url, setUrl] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageUploadBusy, setImageUploadBusy] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const [selectedProposalId, setSelectedProposalId] = useState<number | null>(null);
   const publicClient = usePublicClient();
   const voteSectionRef = useRef<HTMLDivElement | null>(null);
@@ -30,11 +35,35 @@ const Governance: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const pid = params.get('proposalId');
     if (pid) setSelectedProposalId(parseInt(pid));
+    const preview = params.get('preview');
     // Smooth scroll to voting section if deep-linked
     setTimeout(() => {
       voteSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 200);
   }, []);
+
+  // Helper: compose url field for contract from image/external link
+  const composeUrlField = (img: string, link: string): string => {
+    const i = img.trim();
+    const l = link.trim();
+    if (i && l) return JSON.stringify({ image: i, link: l });
+    return i || l || '';
+  };
+
+  // Helper: parse url field into image/external link
+  const parseUrlField = (u: any): { imageUrl?: string; externalUrl?: string } => {
+    const s = String(u || '');
+    if (!s) return {};
+    try {
+      if (s.startsWith('{')) {
+        const obj = JSON.parse(s);
+        return { imageUrl: obj.image || '', externalUrl: obj.link || '' };
+      }
+    } catch {}
+    const lower = s.toLowerCase();
+    const isImage = lower.startsWith('data:image/') || /(\.png|\.jpg|\.jpeg|\.gif|\.webp)(\?.*)?$/i.test(lower);
+    return isImage ? { imageUrl: s } : { externalUrl: s };
+  };
 
   // Read total proposals count
   const { data: proposalCountData } = useContractRead({
@@ -45,6 +74,8 @@ const Governance: React.FC = () => {
 
   // Read proposals list
   const [proposals, setProposals] = useState<any[]>([]);
+  const [previewOpen, setPreviewOpen] = useState<boolean>(false);
+  const [previewProposal, setPreviewProposal] = useState<any | null>(null);
   useEffect(() => {
     async function loadProposals() {
       const count = Number(proposalCountData || 0);
@@ -80,6 +111,9 @@ const Governance: React.FC = () => {
               againstVotes: Number(r.againstVotes || 0),
               closed: Boolean(r.closed || false),
             };
+            const { imageUrl: img, externalUrl: ext } = parseUrlField((parsed as any).url);
+            (parsed as any).imageUrl = img;
+            (parsed as any).externalUrl = ext;
             arr.push(parsed);
           }
         } catch (e) {
@@ -91,10 +125,49 @@ const Governance: React.FC = () => {
     loadProposals();
   }, [proposalCountData, publicClient]);
 
+  // Auto-open preview modal if deep-linked with preview=true
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const pid = params.get('proposalId');
+    const preview = params.get('preview');
+    if (preview === 'true' && pid) {
+      const p = proposals.find((x) => Number(x.id) === Number(pid));
+      if (p) { setPreviewProposal(p); setPreviewOpen(true); }
+    }
+  }, [proposals]);
+
+  const openPreview = (p: any) => { setPreviewProposal(p); setPreviewOpen(true); };
+  const closePreview = () => { setPreviewOpen(false); };
+
   // Create proposal via wallet
   const canCreate = title.trim().length > 0;
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImageUploadError(null);
+    const f = e.target.files?.[0] || null;
+    setImageFile(f);
+  };
+
+  const handleUploadImage = async () => {
+    setImageUploadError(null);
+    if (!imageFile) { setImageUploadError('Select an image first.'); return; }
+    setImageUploadBusy(true);
+    try {
+      const result = await uploadImageToIPFS(imageFile, {
+        filename: imageFile.name,
+        metadata: { name: imageFile.name, keyvalues: { type: 'proposal-banner', title: title || 'Untitled' } },
+        verify: false,
+      });
+      setImageUrl(result.url);
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to upload image';
+      setImageUploadError(msg);
+    } finally {
+      setImageUploadBusy(false);
+    }
+  };
 
   const handleSubmitProposal = async () => {
     setCreateError(null);
@@ -102,14 +175,15 @@ const Governance: React.FC = () => {
     setCreateBusy(true);
     try {
       await ensureOgChain();
+      const payloadUrl = composeUrlField(imageUrl, url);
       const txHash = await walletClient.writeContract({
         address: GOVERNANCE_CONFIG.address,
         abi: GOVERNANCE_CONFIG.abi,
         functionName: 'createProposal',
-        args: [title, description, url],
+        args: [title, description, payloadUrl],
       });
       await publicClient?.waitForTransactionReceipt({ hash: txHash });
-      setTitle(''); setDescription(''); setUrl('');
+      setTitle(''); setDescription(''); setUrl(''); setImageUrl('');
       // refresh proposals
       const count = Number(await publicClient?.readContract({
         address: GOVERNANCE_CONFIG.address,
@@ -149,6 +223,9 @@ const Governance: React.FC = () => {
               againstVotes: Number(r.againstVotes || 0),
               closed: Boolean(r.closed || false),
             };
+            const { imageUrl: img, externalUrl: ext } = parseUrlField((parsed as any).url);
+            (parsed as any).imageUrl = img;
+            (parsed as any).externalUrl = ext;
             arr.push(parsed);
           }
         } catch {}
@@ -283,7 +360,7 @@ const Governance: React.FC = () => {
 
   const handleShareLink = (id: number) => {
     const base = window.location.origin + window.location.pathname;
-    const link = `${base}?proposalId=${id}`;
+    const link = `${base}?proposalId=${id}&preview=true`;
     navigator.clipboard.writeText(link).catch(() => {});
     alert('Proposal link copied to clipboard');
   };
@@ -356,7 +433,26 @@ const Governance: React.FC = () => {
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
               />
-              <label className="block text-xs font-medium text-gray-700 mt-2">Optional URL</label>
+              <label className="block text-xs font-medium text-gray-700 mt-2">Image (optional)</label>
+              <input
+                type="file"
+                accept="image/*"
+                className="input-field"
+                onChange={handleImageFileChange}
+              />
+              {imageFile && !imageUrl && (
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-xs text-gray-600">{imageFile.name}</p>
+                  <button className="btn-secondary text-xs" onClick={handleUploadImage} disabled={imageUploadBusy}>
+                    <Icon icon="ph:cloud-arrow-up" className="w-4 h-4 mr-1" /> {imageUploadBusy ? 'Uploading...' : 'Upload Image'}
+                  </button>
+                </div>
+              )}
+              {imageUrl && (
+                <div className="h-24 rounded-lg mt-2 bg-cover bg-center" style={{ backgroundImage: `url(${imageUrl})` }} />
+              )}
+              {imageUploadError && <p className="text-xs text-red-600 mt-1">{imageUploadError}</p>}
+              <label className="block text-xs font-medium text-gray-700 mt-2">External Link (optional)</label>
               <input
                 className="input-field"
                 placeholder="Context link or call-to-action"
@@ -408,6 +504,38 @@ const Governance: React.FC = () => {
           </div>
         </div>
       </motion.div>
+      {previewOpen && previewProposal && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full overflow-hidden">
+            {previewProposal.imageUrl && (
+              <div className="h-48 bg-cover bg-center" style={{ backgroundImage: `url(${previewProposal.imageUrl})` }} />
+            )}
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-lg font-semibold text-gray-900">Proposal #{Number(previewProposal.id)} • {previewProposal.title}</h4>
+                <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">{previewProposal.closed ? 'Closed' : 'Open'}</span>
+              </div>
+              <p className="text-xs text-gray-600">For: <span className="font-medium text-gray-900">{Number(previewProposal.forVotes)}</span> • Against: <span className="font-medium text-gray-900">{Number(previewProposal.againstVotes)}</span></p>
+              <p className="text-xs text-gray-500 mt-1">Proposer: {previewProposal.proposer?.slice(0,6)}...{previewProposal.proposer?.slice(-4)} • Created: {previewProposal.createdAt ? new Date(previewProposal.createdAt * 1000).toLocaleString() : '—'}</p>
+              <p className="text-sm text-gray-700 mt-3 break-words">{previewProposal.description}</p>
+              {previewProposal.externalUrl && (
+                <a className="text-xs text-indigo-600 underline mt-2 inline-block" href={previewProposal.externalUrl} target="_blank" rel="noreferrer">External link</a>
+              )}
+              <div className="flex items-center justify-end space-x-2 mt-4">
+                <button className="btn-secondary text-xs" onClick={() => { setVoteTargetId(Number(previewProposal.id)); voteSectionRef.current?.scrollIntoView({ behavior: 'smooth' }); closePreview(); }}>
+                  <Icon icon="ph:checks" className="w-4 h-4 mr-1" /> Vote
+                </button>
+                <button className="btn-secondary text-xs" onClick={() => handleShareLink(Number(previewProposal.id))}>
+                  <Icon icon="ph:link-simple" className="w-4 h-4 mr-1" /> Copy Link
+                </button>
+                <button className="btn-primary text-xs" onClick={closePreview}>
+                  <Icon icon="ph:x" className="w-4 h-4 mr-1" /> Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -426,6 +554,9 @@ const Governance: React.FC = () => {
         <ul className="divide-y divide-gray-200">
           {proposals.map((p: any) => (
             <li key={Number(p.id || 0)} className="py-3">
+              {p.imageUrl && (
+                <div className="h-24 rounded-lg mb-2 bg-cover bg-center" style={{ backgroundImage: `url(${p.imageUrl})` }} />
+              )}
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-900 font-medium">Proposal #{Number(p.id)} • {p.title}</p>
@@ -433,8 +564,8 @@ const Governance: React.FC = () => {
                     ID: #{Number(p.id)} • For: <span className="font-medium text-gray-900">{Number(p.forVotes)}</span> • Against: <span className="font-medium text-gray-900">{Number(p.againstVotes)}</span>
                   </p>
                   <p className="text-xs text-gray-600 break-words">{p.description}</p>
-                  {p.url && (
-                    <a className="text-xs text-indigo-600 underline" href={p.url} target="_blank" rel="noreferrer">External link</a>
+                  {p.externalUrl && (
+                    <a className="text-xs text-indigo-600 underline" href={p.externalUrl} target="_blank" rel="noreferrer">External link</a>
                   )}
                   <p className="text-xs text-gray-500 mt-1">Proposer: {p.proposer?.slice(0,6)}...{p.proposer?.slice(-4)} • Created: {p.createdAt ? new Date(p.createdAt * 1000).toLocaleString() : '—'}</p>
                 </div>
@@ -447,6 +578,9 @@ const Governance: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <button className="btn-secondary text-xs" onClick={() => { setVoteTargetId(Number(p.id)); voteSectionRef.current?.scrollIntoView({ behavior: 'smooth' }); }}>
                     <Icon icon="ph:checks" className="w-4 h-4 mr-1" /> Vote
+                  </button>
+                  <button className="btn-secondary text-xs" onClick={() => openPreview(p)}>
+                    <Icon icon="ph:eye" className="w-4 h-4 mr-1" /> Preview
                   </button>
                   <button className="btn-secondary text-xs" onClick={() => handleShareLink(Number(p.id))}>
                     <Icon icon="ph:link-simple" className="w-4 h-4 mr-1" /> Copy Link

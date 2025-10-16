@@ -304,3 +304,92 @@ export async function smartUploadToIPFS(data: any, options: UploadOptions = {}):
     return await simulateIPFSUpload(data);
   }
 }
+
+/**
+ * Upload an image file to IPFS via Pinata through Netlify Function
+ * @param file - The image File selected by the user
+ * @param options - Optional metadata and verification flags
+ */
+export async function uploadImageToIPFS(file: File, options: UploadOptions = {}): Promise<UploadResult> {
+  try {
+    validatePinataConfig();
+
+    if (!pinataRateLimiter.canMakeCall()) {
+      const waitTime = pinataRateLimiter.getTimeUntilNextCall();
+      throw new Error(`RATE_LIMIT_ERROR: Too many requests. Please wait ${Math.ceil(waitTime / 1000)} seconds before trying again.`);
+    }
+
+    if (!(file instanceof File) || !file.type.startsWith('image/')) {
+      throw new Error('UPLOAD_TYPE_ERROR: Only image files are supported.');
+    }
+
+    const filename = sanitizeFilename(options.filename || file.name || 'image');
+
+    // Read file as Data URL (base64) for server function to decode
+    const fileBase64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error || new Error('Failed to read image file'));
+      reader.readAsDataURL(file);
+    });
+
+    pinataRateLimiter.recordCall();
+
+    const secureMetadata = generateSecureMetadata({
+      originalFilename: filename,
+      fileType: file.type,
+      fileSize: file.size,
+    });
+
+    const mergedKV = {
+      ...secureMetadata,
+      ...(options.metadata?.keyvalues || {}),
+    } as Record<string, string | number>;
+
+    const resp = await fetch('/.netlify/functions/pinata-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileBase64,
+        filename,
+        metadata: {
+          name: options?.metadata?.name || filename,
+          keyvalues: mergedKV,
+        },
+        groupId: options?.metadata?.groupId,
+      }),
+    });
+
+    const text = await resp.text();
+    if (!resp.ok) {
+      throw new Error(`SERVER_UPLOAD_ERROR: ${resp.status} ${text}`);
+    }
+
+    const serverResult = JSON.parse(text);
+    const cid = serverResult.cid;
+    const url = serverResult.url;
+
+    return {
+      cid,
+      id: serverResult.id,
+      url,
+      size: serverResult.size || file.size,
+      verified: false,
+      metadata: options.metadata,
+    };
+  } catch (error) {
+    console.error('Image IPFS upload failed:', error);
+
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+      if (errorMessage.includes('RATE_LIMIT_ERROR') || errorMessage.includes('FILE_SIZE_ERROR')) {
+        throw error;
+      }
+      if (error instanceof TypeError && errorMessage.includes('Failed to fetch')) {
+        throw new Error('NETWORK_ERROR: Upload failed due to network issues. Try again or check function availability.');
+      }
+    }
+
+    throw new Error(`Failed to upload image to IPFS: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}

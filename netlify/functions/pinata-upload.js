@@ -1,10 +1,13 @@
-// Netlify Function: Proxy Pinata JSON uploads to avoid browser CORS and protect secrets
+// Netlify Function: Proxy Pinata uploads to avoid browser CORS and protect secrets
 // Uses Node 18 global fetch and expects PINATA_JWT to be set in Netlify environment
 
 /**
  * Expected request body (JSON):
  * {
- *   data: object,              // JSON object to pin
+ *   // JSON upload (pinJSONToIPFS)
+ *   data?: object,             // JSON object to pin
+ *   // File upload (pinFileToIPFS)
+ *   fileBase64?: string,       // base64 string or data URL of file (images supported)
  *   filename?: string,         // optional display name
  *   metadata?: {               // optional Pinata metadata
  *     name?: string,
@@ -36,15 +39,7 @@ exports.handler = async (event) => {
     }
 
     const body = JSON.parse(event.body || '{}');
-    const { data, filename, metadata, groupId } = body;
-
-    if (!data) {
-      return {
-        statusCode: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Missing required field: data' }),
-      };
-    }
+    const { data, fileBase64, filename, metadata, groupId } = body;
 
     // Build pinJSONToIPFS payload
     // Enforce max 10 keyvalues per Pinata constraints
@@ -57,28 +52,68 @@ exports.handler = async (event) => {
       return out;
     };
 
-    const pinPayload = {
-      pinataContent: data,
-      pinataMetadata: {
-        name: (metadata && metadata.name) || filename || 'dataset.json',
-        keyvalues: limitKeyvalues((metadata && metadata.keyvalues) || {}, 10),
-      },
-      // Pinata options can be extended here if needed
-    };
-
-    const headers = { 'Content-Type': 'application/json' };
+    // Build headers (auth only; Content-Type is set by fetch when using FormData)
+    const authHeaders = {};
     if (token) {
-      headers.Authorization = `Bearer ${token}`;
+      authHeaders.Authorization = `Bearer ${token}`;
     } else {
-      headers.pinata_api_key = apiKey;
-      headers.pinata_secret_api_key = apiSecret;
+      authHeaders.pinata_api_key = apiKey;
+      authHeaders.pinata_secret_api_key = apiSecret;
     }
 
-    const resp = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(pinPayload),
-    });
+    let resp;
+    if (fileBase64) {
+      // pinFileToIPFS path for images/files
+      // Convert base64/data URL to buffer and mime
+      let base64 = String(fileBase64);
+      let mime = 'application/octet-stream';
+      if (base64.startsWith('data:')) {
+        const parts = base64.split(',');
+        const header = parts[0] || '';
+        base64 = parts[1] || '';
+        const m = header.match(/^data:(.*?);base64$/);
+        if (m && m[1]) mime = m[1];
+      }
+      const buf = Buffer.from(base64, 'base64');
+
+      const form = new FormData();
+      const name = (metadata && metadata.name) || filename || 'upload';
+      const displayName = filename || name || 'upload';
+      const blob = new Blob([buf], { type: mime });
+      form.append('file', blob, displayName);
+      form.append('pinataMetadata', JSON.stringify({
+        name: name,
+        keyvalues: limitKeyvalues((metadata && metadata.keyvalues) || {}, 10),
+      }));
+      // Optional pinataOptions if needed
+      // form.append('pinataOptions', JSON.stringify({ cidVersion: 1 }));
+
+      resp = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+        method: 'POST',
+        headers: authHeaders,
+        body: form,
+      });
+    } else if (data) {
+      // pinJSONToIPFS path for JSON objects
+      const pinPayload = {
+        pinataContent: data,
+        pinataMetadata: {
+          name: (metadata && metadata.name) || filename || 'dataset.json',
+          keyvalues: limitKeyvalues((metadata && metadata.keyvalues) || {}, 10),
+        },
+      };
+      resp = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify(pinPayload),
+      });
+    } else {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Missing required field: fileBase64 or data' }),
+      };
+    }
 
     const text = await resp.text();
     if (!resp.ok) {
@@ -155,7 +190,7 @@ exports.handler = async (event) => {
     }
 
     const cid = json.IpfsHash || json.cid || json.hash;
-    const pinSize = json.PinSize || 0;
+    const pinSize = json.PinSize || json.size || 0;
 
     const normalizeGatewayHost = (raw) => {
       let s = (raw || 'gateway.pinata.cloud').trim();
