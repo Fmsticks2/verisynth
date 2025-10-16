@@ -23,6 +23,7 @@ export interface GeneratedDataset {
     transactionHash?: string;
     blockchainTimestamp?: number;
     quality?: QualityMetrics;
+    topicCompliance?: TopicCompliance;
   };
 }
 
@@ -44,4 +45,10 @@ export interface QualityMetrics {
   numericFieldStats: Record<string, { min: number; max: number; mean: number }>;
   categoricalUniques: Record<string, number>;
   score: number; // 0-100 simple quality score
+}
+
+export interface TopicCompliance {
+  canonicalTopic: string;
+  requiredCoverage: number; // percentage 0-100
+  score: number; // 0-100
 }

@@ -7,6 +7,7 @@ import { generateSyntheticData } from '../utils/dataGenerator';
 import { uploadDatasetToIPFS } from '../utils/ipfsUpload';
 import { getOgEntropy } from '../utils/ogCompute';
 import { assessQuality } from '../utils/dataQuality';
+import { assessTopicCompliance } from '../utils/topicCompliance';
 import { GeneratedDataset } from '../types';
 import { CONTRACT_CONFIG } from '../utils/contractConfig';
 import Modal from './Modal';
@@ -100,23 +101,25 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
         { extraEntropy, algorithm: useAdvancedAlgo ? 'advanced' : 'basic' }
       );
 
-      // Assess quality metrics and attach
+      // Assess quality metrics and topic compliance, then attach
       const quality = assessQuality(dataset.data);
-      const withQuality: GeneratedDataset = {
+      const topicCompliance = assessTopicCompliance(formData.topic, dataset.data);
+      const withMetrics: GeneratedDataset = {
         ...dataset,
         metadata: {
           ...dataset.metadata,
           quality,
+          topicCompliance,
         },
       };
 
-      setGeneratedDataset(withQuality);
-      onDatasetGenerated?.(withQuality);
+      setGeneratedDataset(withMetrics);
+      onDatasetGenerated?.(withMetrics);
       
       setModalContent({
         type: 'success',
         title: 'Dataset Generated',
-        message: `Successfully generated ${withQuality.data.length} records with hash: ${withQuality.hash.slice(0, 12)}...`,
+        message: `Successfully generated ${withMetrics.data.length} records with hash: ${withMetrics.hash.slice(0, 12)}...`,
       });
       setShowModal(true);
     } catch (error) {
@@ -201,6 +204,7 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
         generatedAt: generatedDataset.metadata.generatedAt,
         hash: generatedDataset.hash,
         cid: generatedDataset.metadata.actualCID || '',
+        topicCompliance: generatedDataset.metadata.topicCompliance || undefined,
       },
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -216,6 +220,19 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
 
   const handleUploadAndRegister = async () => {
     if (!generatedDataset || !isConnected || hasInitiatedTransaction) return;
+
+    // Gate by topic compliance: require at least 80% required field coverage
+    const complianceScore = generatedDataset.metadata.topicCompliance?.score ?? 0;
+    const canonical = generatedDataset.metadata.topicCompliance?.canonicalTopic ?? 'unknown';
+    if (canonical === 'unknown' || complianceScore < 80) {
+      setModalContent({
+        type: 'error',
+        title: 'Topic Compliance Required',
+        message: `Dataset does not sufficiently match the requested topic (canonical: ${canonical}, score: ${Math.round(complianceScore)}). Please refine your topic or re-generate for better alignment.`,
+      });
+      setShowModal(true);
+      return;
+    }
 
     setIsUploading(true);
     
@@ -486,12 +503,12 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
           </div>
 
           {generatedDataset.metadata.quality && (
-            <div className="bg-blue-50 rounded-xl p-4 mb-4">
-              <div className="flex items-center space-x-2 mb-3">
-                <Icon icon="ph:gauge" className="w-5 h-5 text-blue-600" />
-                <span className="text-sm font-semibold text-blue-800">Data Quality</span>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div className="bg-blue-50 rounded-xl p-4 mb-4">
+            <div className="flex items-center space-x-2 mb-3">
+              <Icon icon="ph:gauge" className="w-5 h-5 text-blue-600" />
+              <span className="text-sm font-semibold text-blue-800">Data Quality</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
                   <span className="text-gray-600">Quality Score:</span>
                   <span className="ml-2 font-semibold">{Math.round((generatedDataset.metadata.quality.score || 0) * 100) / 100}</span>
@@ -508,23 +525,51 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
                   <span className="text-gray-600">Records:</span>
                   <span className="ml-2 font-semibold">{generatedDataset.metadata.quality.recordCount}</span>
                 </div>
-              </div>
-              {/* Show a couple of numeric field summaries if available */}
-              {generatedDataset.metadata.quality.numericFieldStats && Object.keys(generatedDataset.metadata.quality.numericFieldStats).length > 0 && (
-                <div className="mt-3 text-xs text-gray-700">
-                  <p className="font-medium">Numeric field stats:</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-                    {Object.entries(generatedDataset.metadata.quality.numericFieldStats).slice(0, 2).map(([k, v]) => {
-                      const stat = v as { min: number; max: number; mean: number };
-                      return (
-                        <div key={k} className="p-2 bg-white rounded-lg border">
-                          <span className="font-semibold">{k}</span>
-                          <span className="ml-2">mean {stat.mean.toFixed(2)}, min {stat.min}, max {stat.max}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+            </div>
+            {/* Show a couple of numeric field summaries if available */}
+            {generatedDataset.metadata.quality.numericFieldStats && Object.keys(generatedDataset.metadata.quality.numericFieldStats).length > 0 && (
+              <div className="mt-3 text-xs text-gray-700">
+                <p className="font-medium">Numeric field stats:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                  {Object.entries(generatedDataset.metadata.quality.numericFieldStats).slice(0, 2).map(([k, v]) => {
+                    const stat = v as { min: number; max: number; mean: number };
+                    return (
+                      <div key={k} className="p-2 bg-white rounded-lg border">
+                        <span className="font-semibold">{k}</span>
+                        <span className="ml-2">mean {stat.mean.toFixed(2)}, min {stat.min}, max {stat.max}</span>
+                      </div>
+                    );
+                  })}
                 </div>
+              </div>
+            )}
+          </div>
+          )}
+
+          {generatedDataset.metadata.topicCompliance && (
+            <div className="bg-purple-50 rounded-xl p-4 mb-4">
+              <div className="flex items-center space-x-2 mb-3">
+                <Icon icon="ph:target" className="w-5 h-5 text-purple-600" />
+                <span className="text-sm font-semibold text-purple-800">Topic Compliance</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600">Compliance Score:</span>
+                  <span className="ml-2 font-semibold">{Math.round((generatedDataset.metadata.topicCompliance.score || 0) * 100) / 100}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Required Coverage:</span>
+                  <span className="ml-2 font-semibold">{Math.round((generatedDataset.metadata.topicCompliance.requiredCoverage || 0))}%</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Canonical Topic:</span>
+                  <span className="ml-2 font-semibold">{generatedDataset.metadata.topicCompliance.canonicalTopic}</span>
+                </div>
+              </div>
+              {(generatedDataset.metadata.topicCompliance.canonicalTopic === 'unknown' || (generatedDataset.metadata.topicCompliance.score || 0) < 80) && (
+                <p className="mt-3 text-xs text-red-700">
+                  Upload is disabled until compliance is at least 80% and topic is recognized.
+                </p>
               )}
             </div>
           )}
@@ -567,7 +612,7 @@ const GeneratePanel: React.FC<GeneratePanelProps> = ({ onDatasetGenerated }) => 
             </button>
             <button
               onClick={handleUploadAndRegister}
-              disabled={!isConnected || isUploading || isTransactionLoading}
+              disabled={!isConnected || isUploading || isTransactionLoading || ((generatedDataset.metadata.topicCompliance?.score ?? 0) < 80)}
               className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploading || isTransactionLoading ? (
